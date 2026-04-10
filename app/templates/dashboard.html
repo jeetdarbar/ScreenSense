@@ -1,6 +1,41 @@
 {% extends "base.html" %}
 
 {% block content %}
+//start of app update
+<script>
+    async function syncUsageData() {
+        // Only run this if we are actually inside the Android App
+        if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+            try {
+                console.log("Requesting screen time from Android...");
+                
+                // 1. Call the Java Plugin we created in Step 3a
+                const { value } = await window.Capacitor.Plugins.UsageStatsPlugin.getUsageData();
+                
+                // 2. The data comes back as a string, so we parse it
+                const usageStats = JSON.parse(value);
+                
+                // 3. Send the data to your Flask Backend
+                const response = await fetch('/api/sync_usage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stats: usageStats })
+                });
+
+                const result = await response.json();
+                console.log("Render Server received the data:", result);
+
+            } catch (err) {
+                console.error("Bridge Error:", err);
+            }
+        }
+    }
+
+    // Auto-sync every time the page loads
+    window.onload = syncUsageData;
+</script>
+//end of app update
+
 <style>
     /* Wind-Down Portal Animations */
     @keyframes breathe {
