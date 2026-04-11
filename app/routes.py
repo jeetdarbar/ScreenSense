@@ -26,7 +26,7 @@ def login():
     
     user = User.query.filter_by(email=email).first()
     if user and user.check_password(password):
-        login_user(user)
+        login_user(user, remember=True)
         return jsonify({'message': 'Logged in successfully'}), 200
         
     return jsonify({'error': 'Invalid email or password'}), 401
@@ -46,7 +46,7 @@ def register():
     db.session.add(new_user)
     db.session.commit()
     
-    login_user(new_user)
+    login_user(new_user, remember=True)
     return jsonify({'message': 'Registration successful'}), 201
 
 @main.route('/logout')
