@@ -4,17 +4,19 @@
 
 <script>
     async function syncUsageData() {
-        // Only run this if we are actually inside the Android App
+        const debugNode = document.getElementById('debugTelemetry');
+        if (debugNode) debugNode.textContent = "Checking Capacitor native platform...";
+
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+            if (debugNode) debugNode.textContent = "Native platform detected. Requesting Android stats...";
             try {
-                console.log("Requesting screen time from Android...");
-                
                 // 1. Call the Java Plugin we created in Step 3a
                 const { value } = await window.Capacitor.Plugins.UsageStatsPlugin.getUsageData();
                 
-                // 2. The data comes back as a string, so we parse it
+                if (debugNode) debugNode.textContent = "Data fetched from Android. Parsing JSON...";
                 const usageStats = JSON.parse(value);
                 
+                if (debugNode) debugNode.textContent = `Found ${usageStats.length} apps. Sending to Python Server...`;
                 // 3. Send the data to your Flask Backend
                 const response = await fetch('/api/sync/usage', {
                     method: 'POST',
@@ -28,14 +30,22 @@
                 const result = await response.json();
                 
                 if(response.ok) {
-                    console.log("Sync complete. Refreshing UI.");
-                    window.location.reload();
+                    if (debugNode) debugNode.textContent = "Python stored data successfully! Reloading UI in 2s...";
+                    // Prevent infinite reload loop
+                    if (!sessionStorage.getItem('synced_today')) {
+                        sessionStorage.setItem('synced_today', 'true');
+                        setTimeout(() => window.location.reload(), 2000);
+                    }
+                } else {
+                    if (debugNode) debugNode.textContent = "Python Backend Error: " + (result.error || response.statusText);
                 }
-                console.log("Render Server received the data:", result);
 
             } catch (err) {
+                if (debugNode) debugNode.textContent = "Bridge Error (Check Android Permissions!): " + err.message;
                 console.error("Bridge Error:", err);
             }
+        } else {
+            if (debugNode) debugNode.textContent = "Android native bridge not found. Are you in a browser?";
         }
     }
 
@@ -421,7 +431,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 <p class="text-sm font-medium text-stone-400">Awaiting Android Telemetry</p>
-                <p class="text-xs text-stone-500 mt-1 max-w-[200px]">Data will appear once Capacitor syncs background signals.</p>
+                <p id="debugTelemetry" class="text-xs text-amber-500 font-mono mt-3 max-w-[250px] p-2 bg-black/40 rounded border border-amber-500/20">Waiting for diagnostic signal...</p>
             </div>
             {% endif %}
         </div>
