@@ -10,11 +10,8 @@
         if (window.Capacitor && window.Capacitor.isNativePlatform()) {
             if (debugNode) debugNode.textContent = "Native platform detected. Requesting Android stats...";
             try {
-                // 1. Explicitly Register the Custom Java Plugin on the JS side (Required for Capacitor 3+)
-                const UsageStatsPlugin = window.Capacitor.registerPlugin('UsageStatsPlugin');
-                
-                // 2. Call the Java Plugin we created
-                const { value } = await UsageStatsPlugin.getUsageData();
+                // 1. Call the Java Plugin we created
+                const { value } = await window.Capacitor.Plugins.UsageStatsPlugin.getUsageData();
                 
                 if (debugNode) debugNode.textContent = "Data fetched from Android. Parsing JSON...";
                 const usageStats = JSON.parse(value);
