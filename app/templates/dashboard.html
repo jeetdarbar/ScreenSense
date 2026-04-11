@@ -16,13 +16,21 @@
                 const usageStats = JSON.parse(value);
                 
                 // 3. Send the data to your Flask Backend
-                const response = await fetch('/api/sync_usage', {
+                const response = await fetch('/api/sync/usage', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ stats: usageStats })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer {{ current_user.api_token }}'
+                    },
+                    body: JSON.stringify(usageStats)
                 });
 
                 const result = await response.json();
+                
+                if(response.ok) {
+                    console.log("Sync complete. Refreshing UI.");
+                    window.location.reload();
+                }
                 console.log("Render Server received the data:", result);
 
             } catch (err) {
@@ -327,110 +335,95 @@
             </div>
         </div>
 
-        <!-- Daily Check-In Form -->
-        <div
-            class="bg-white/5 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/10 relative z-10 hover:z-50 transition-z duration-300">
-            <div class="flex items-center space-x-2 mb-4">
-                <h3 class="text-lg font-semibold text-gray-200">Nightly Check-In</h3>
-                <div class="group relative flex items-center">
-                    <svg class="w-4 h-4 text-stone-400 hover:text-amber-500 cursor-help transition-colors" fill="none"
-                        stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div
-                        class="opacity-0 invisible group-hover:opacity-100 group-hover:visible absolute left-0 mt-2 top-full w-64 p-3 bg-zinc-800 text-xs text-amber-100 rounded-xl shadow-xl border border-amber-500/30 z-50 transition-all duration-300 pointer-events-none font-normal">
-                        Log your screen usage and late-day stimulants here. Our engine uses this to prescribe your
-                        acoustic therapy and predict tomorrow's grogginess.
+        <!-- Digital Wellbeing Sync Box -->
+        <div class="bg-white/5 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-white/10 relative z-10 hover:z-50 transition-z duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-2">
+                    <h3 class="text-lg font-semibold text-gray-200">Device Wellbeing</h3>
+                    <div class="group relative flex items-center">
+                        <svg class="w-4 h-4 text-stone-400 hover:text-amber-500 cursor-help transition-colors" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div class="opacity-0 invisible group-hover:opacity-100 group-hover:visible absolute left-0 mt-2 top-full w-64 p-3 bg-zinc-800 text-xs text-amber-100 rounded-xl shadow-xl border border-amber-500/30 z-50 transition-all duration-300 pointer-events-none font-normal">
+                            Telemetric data synced automatically in the background via Capacitor.
+                        </div>
                     </div>
+                </div>
+                <div class="flex items-center space-x-1 text-xs text-green-400 font-mono bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20 shadow-[0_0_10px_rgba(74,222,128,0.1)]">
+                    <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block mr-1"></span> Synced
                 </div>
             </div>
 
-            <form id="checkInForm" class="space-y-4">
-                <!-- Total Screen Time Field Removed -->
-
-                <div>
-                    <label class="block text-xs font-medium text-stone-400 uppercase">Target Bedtime</label>
-                    <input type="time" id="targetBedtime"
-                        class="w-full mt-1 p-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-1 focus:ring-amber-500/50 outline-none text-stone-200 [color-scheme:dark]"
-                        required>
-                </div>
-
-                <div class="border-t border-white/10 pt-3 mt-3">
-                    <span class="block text-xs font-bold text-amber-500 mb-2 uppercase tracking-wide">Usage After
-                        Bedtime</span>
-
-                    <div class="space-y-4">
-                        <!-- Platform-Specific Digital Footprint -->
-                        <div class="grid grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-xs font-medium text-pink-400 mb-1">TikTok / Instagram</label>
-                                <input type="number" step="0.1" id="tiktokHours"
-                                    class="w-full p-2 bg-white/5 border border-pink-500/20 rounded-lg focus:ring-2 focus:ring-pink-500 focus:shadow-[0_0_10px_rgba(236,72,153,0.5)] outline-none text-stone-200 placeholder-gray-600 transition-all"
-                                    placeholder="0.0">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-red-400 mb-1">YouTube</label>
-                                <input type="number" step="0.1" id="youtubeHours"
-                                    class="w-full p-2 bg-white/5 border border-red-500/20 rounded-lg focus:ring-2 focus:ring-red-500 focus:shadow-[0_0_10px_rgba(239,68,68,0.5)] outline-none text-stone-200 placeholder-gray-600 transition-all"
-                                    placeholder="0.0">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-orange-400 mb-1">Other Socials</label>
-                                <input type="number" step="0.1" id="otherSocialsHours"
-                                    class="w-full p-2 bg-white/5 border border-orange-500/20 rounded-lg focus:ring-2 focus:ring-orange-500 focus:shadow-[0_0_10px_rgba(249,115,22,0.5)] outline-none text-stone-200 placeholder-gray-600 transition-all"
-                                    placeholder="0.0">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-purple-400 mb-1">Gaming</label>
-                                <input type="number" step="0.1" id="gamingHours"
-                                    class="w-full p-2 bg-white/5 border border-purple-500/20 rounded-lg focus:ring-2 focus:ring-purple-500 focus:shadow-[0_0_10px_rgba(168,85,247,0.5)] outline-none text-stone-200 placeholder-gray-600 transition-all"
-                                    placeholder="0.0">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-medium text-stone-400">Academic/Work (Hours)</label>
-                            <input type="number" step="0.1" id="academicHours"
-                                class="w-full mt-1 p-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-1 focus:ring-amber-500/50 outline-none text-stone-200 placeholder-gray-600"
-                                placeholder="e.g. 0.5" required>
-                        </div>
+            {% if latest_log %}
+            <div class="space-y-4">
+                <div class="bg-zinc-950/40 border border-white/5 rounded-xl p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold text-stone-400 uppercase tracking-widest">Target Bedtime</span>
+                        <span class="text-sm font-mono text-amber-500">{{ latest_log.target_bedtime }}</span>
                     </div>
 
-                    <div class="space-y-3 mt-6">
-                        <div>
-                            <label class="block text-xs font-medium text-stone-400 uppercase">Pickups > Bedtime</label>
-                            <input type="number" id="pickups"
-                                class="w-full mt-1 p-2 bg-white/5 border border-white/10 rounded-lg focus:ring-2 focus:ring-1 focus:ring-amber-500/50 outline-none text-stone-200 placeholder-gray-600"
-                                placeholder="Count" required>
-                        </div>
-                    </div>
+                    <div class="space-y-3 mt-4">
+                        {% set apps = latest_log.get_usage_list() %}
+                        {% if apps %}
+                            {% for app in apps|sort(attribute='minutes', reverse=True) %}
+                                {% if loop.index <= 6 %}
+                                <div class="relative">
+                                    <div class="flex justify-between items-end mb-1">
+                                        <!-- Dynamic Colors based on Category -->
+                                        {% set color_class = 'text-pink-400' %}
+                                        {% set dot_bg = 'bg-pink-500' %}
+                                        {% set bar_gradient = 'from-pink-600 to-pink-400' %}
+                                        
+                                        {% if app.category == 'Game' %}
+                                            {% set color_class = 'text-purple-400' %}
+                                            {% set dot_bg = 'bg-purple-500' %}
+                                            {% set bar_gradient = 'from-purple-600 to-purple-400' %}
+                                        {% elif app.category == 'Social Media' %}
+                                            {% set color_class = 'text-orange-400' %}
+                                            {% set dot_bg = 'bg-orange-500' %}
+                                            {% set bar_gradient = 'from-orange-600 to-orange-400' %}
+                                        {% endif %}
 
-                    <!-- Phase 4: Late-Day Stimulants (Hidden) -->
-                    <div class="bg-gray-800/60 p-5 rounded-2xl border border-white/5 space-y-4 mt-6 hidden">
-                        <h3 class="text-sm font-semibold text-stone-300 uppercase tracking-wider flex items-center">
-                            <svg class="w-4 h-4 mr-2 text-yellow-500" fill="none" stroke="currentColor"
-                                viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                            Late-Day Stimulants
-                        </h3>
-
-                        <!-- Hidden Inputs explicitly replacing UI elements -->
-                        <div>
-                            <input type="hidden" id="caffeineType" name="caffeine_type" value="None">
-                            <input type="hidden" id="caffeineModifiers" name="caffeine_modifiers" value="false">
-                            <input type="hidden" id="caffeineTime" name="caffeine_time" value="00:00">
-                        </div>
+                                        <span class="text-xs font-medium {{ color_class }} flex items-center truncate max-w-[150px]">
+                                            <span class="w-2 h-2 rounded-full {{ dot_bg }} mr-2 shadow-[0_0_5px_currentColor]"></span>
+                                            {{ app.name }}
+                                        </span>
+                                        <span class="text-xs font-mono text-stone-300">{{ app.minutes }} m</span>
+                                    </div>
+                                    <div class="w-full bg-black/40 rounded-full h-1.5">
+                                        <div class="bg-gradient-to-r {{ bar_gradient }} h-1.5 rounded-full" style="width: {{ [100, (app.minutes / 180) * 100]|min }}%"></div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-xs text-stone-500 italic">No applications monitored.</p>
+                        {% endif %}
                     </div>
                 </div>
 
-                <button type="submit"
-                    class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-stone-200 py-3 rounded-lg font-bold hover:scale-105 transition-transform shadow-lg shadow-indigo-500/40 mt-4">
-                    Calculate Risk
-                </button>
-            </form>
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                    <div class="bg-zinc-950/40 border border-white/5 rounded-xl p-3 text-center transition-all hover:bg-white/5">
+                        <span class="block text-[10px] text-stone-400 uppercase tracking-widest mb-1">Academic</span>
+                        <span class="text-lg font-mono text-blue-400">{{ latest_log.academic_minutes_after_bedtime }}<span class="text-xs text-blue-400/50">m</span></span>
+                    </div>
+                    <div class="bg-zinc-950/40 border border-white/5 rounded-xl p-3 text-center transition-all hover:bg-white/5">
+                        <span class="block text-[10px] text-stone-400 uppercase tracking-widest mb-1">Pickups</span>
+                        <span class="text-lg font-mono text-green-400">{{ latest_log.pickups_after_bedtime }}<span class="text-xs text-green-400/50">x</span></span>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="py-12 border border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-center bg-black/20">
+                <svg class="w-8 h-8 text-stone-600 mb-3 animate-spin duration-3000" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <p class="text-sm font-medium text-stone-400">Awaiting Android Telemetry</p>
+                <p class="text-xs text-stone-500 mt-1 max-w-[200px]">Data will appear once Capacitor syncs background signals.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 

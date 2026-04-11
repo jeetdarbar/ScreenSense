@@ -72,16 +72,19 @@ class AnalyticsEngine:
         # 2. Extract Data into List of Dicts
         data = []
         for log, feedback in results:
-            data.append({
-                "tiktok_hours": log.tiktok_ig_hours,
-                "youtube_hours": log.youtube_hours,
-                "other_socials_hours": log.other_socials_hours,
-                "gaming_hours": log.gaming_hours,
-                "academic_hours": log.academic_hours_after_bedtime,
+            row = {
+                "academic_hours": log.academic_minutes_after_bedtime / 60.0,
                 "pickups": log.pickups_after_bedtime,
                 "latency": feedback.time_to_fall_asleep_mins,
                 "grogginess": feedback.morning_grogginess_score if feedback.morning_grogginess_score else 0
-            })
+            }
+            # Dynamically flatten app categories for pie chart
+            for app in log.get_usage_list():
+                cat = app.get('category')
+                key = cat.lower().replace(' ', '_') + "_hours" if cat else "other"
+                row[key] = row.get(key, 0) + (app.get('minutes', 0) / 60.0)
+                
+            data.append(row)
 
         # 3. Create DataFrame
         df = pd.DataFrame(data)
@@ -97,18 +100,15 @@ class AnalyticsEngine:
         
         # Dimensions to analyze
         dimensions = [
-            ("tiktok_hours", "TikTok/IG"),
-            ("youtube_hours", "YouTube"),
-            ("other_socials_hours", "Other Socials"),
-            ("gaming_hours", "Gaming"),
+            ("social_media_hours", "Social Media"),
+            ("game_hours", "Gaming"),
             ("academic_hours", "Late Study"),
             ("pickups", "Phone Pickups")
         ]
         
         # Normalization Baselines (What counts as "Massive Usage" = 1.0)
         norm_limits = {
-            "tiktok_hours": 2.0, "youtube_hours": 2.0, "other_socials_hours": 2.0, 
-            "gaming_hours": 2.0, "academic_hours": 2.0, "pickups": 10.0
+            "social_media_hours": 2.0, "game_hours": 2.0, "academic_hours": 2.0, "pickups": 10.0
         }
 
         for col, label in dimensions:
@@ -157,19 +157,11 @@ class AnalyticsEngine:
         if score <= 0.05:
              return "No Negative Correlation: Not currently affecting latency."
              
-        if dimension == "tiktok_hours":
-            if score > 0.4: return "High Dopamine Velocity: Short-form video is your #1 sleep killer."
+        if dimension == "social_media_hours":
+            if score > 0.4: return "High Dopamine Velocity: Social media is your #1 sleep killer."
             return "Moderate Impact: Dopamine looping is delaying onset."
-            
-        elif dimension == "youtube_hours":
-             if score > 0.4: return "Parasocial Arousal: Long-form content is keeping you awake."
-             return "Moderate Impact: Autoplay is likely the culprit."
 
-        elif dimension == "other_socials_hours":
-             if score > 0.4: return "Information Foraging: Your brain is hunting for novelty on social apps."
-             return "Moderate Impact: Text consumption keeps the cortex active."
-
-        elif dimension == "gaming_hours":
+        elif dimension == "game_hours":
              if score > 0.4: return "Adrenaline Spike: Competitive play is physically blocking sleep."
              return "Moderate Impact: Cool down required before bed."
 

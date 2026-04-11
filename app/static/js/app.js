@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', function () {
 let riskChart = null;
 
 function setupEventListeners() {
-    document.getElementById('checkInForm').addEventListener('submit', handleCheckIn);
     // Submit Feedback using the new Morning Report logic
     document.getElementById('submitFeedbackBtn').addEventListener('click', submitFeedback);
 
@@ -125,105 +124,7 @@ function renderChart(data) {
     });
 }
 
-async function handleCheckIn(e) {
-    e.preventDefault();
 
-    const btn = e.target.querySelector('button[type="submit"]');
-    const originalText = btn.textContent;
-    btn.textContent = "Calculating...";
-    btn.disabled = true;
-
-    const formData = {
-        // total_screen_hours removed
-        target_bedtime: document.getElementById('targetBedtime').value,
-        // Platform Breakdown
-        tiktok_ig_hours: document.getElementById('tiktokHours').value || 0,
-        youtube_hours: document.getElementById('youtubeHours').value || 0,
-        other_socials_hours: document.getElementById('otherSocialsHours').value || 0,
-        gaming_hours: document.getElementById('gamingHours').value || 0,
-
-        academic_hours_after_bedtime: document.getElementById('academicHours').value,
-        pickups_after_bedtime: document.getElementById('pickups').value,
-
-        // Phase 4: Caffeine
-        caffeine_type: document.getElementById('caffeineType').value,
-        caffeine_time: document.getElementById('caffeineTime').value,
-        caffeine_modifiers: document.getElementById('caffeineModifiers').checked
-    };
-
-    try {
-        const response = await fetch('/checkin', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-            handleRiskResponse(result);
-            loadDashboardData();
-        } else {
-            alert('Error: ' + result.error);
-        }
-    } catch (error) {
-        console.error('Check-in failed:', error);
-        alert('An unexpected error occurred. Please try again.');
-    } finally {
-        btn.textContent = originalText;
-        btn.disabled = false;
-    }
-}
-
-function handleRiskResponse(result) {
-    const riskBadge = document.getElementById('riskBadge');
-    const riskScoreValue = document.getElementById('riskScoreValue');
-    const nudgeMessage = document.getElementById('nudgeMessage');
-
-    riskScoreValue.textContent = result.risk_score;
-    riskBadge.textContent = result.risk_level;
-
-    // Update Risk Marker Position
-    updateRiskMarker(result.risk_score);
-
-    // Reset UI states
-    document.body.classList.remove('wind-down-active');
-    nudgeMessage.classList.add('hidden');
-    document.getElementById('insightContainer').classList.add('hidden');
-
-    if (result.risk_level === 'Safe') {
-        riskBadge.className = 'px-4 py-2 rounded-full text-sm font-bold bg-green-500/20 text-green-300 border border-green-500/30 shadow-[0_0_15px_rgba(74,222,128,0.2)]';
-        nudgeMessage.textContent = "Great job! Your focus is optimized.";
-        nudgeMessage.classList.remove('hidden');
-
-    } else if (result.risk_level === 'Moderate') {
-        riskBadge.className = 'px-4 py-2 rounded-full text-sm font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 shadow-[0_0_15px_rgba(250,204,21,0.2)]';
-        nudgeMessage.textContent = "Your sleep risk is rising. Try limiting social media.";
-        nudgeMessage.classList.remove('hidden');
-
-    } else if (result.risk_level === 'High') {
-        riskBadge.className = 'px-4 py-2 rounded-full text-sm font-bold bg-red-500/20 text-red-300 border border-red-500/30 shadow-[0_0_15px_rgba(248,113,113,0.3)]';
-        // Only trigger protocol if specifically requested, or just show insight.
-        // For this phase, let's just show insight and maybe trigger protocol manually or via button?
-        // Protocol trigger was removed in previous refactor step to focus on Insight?
-        // Let's re-add simple trigger or just keep it active.
-        // initiateWindDownProtocol(); // Optional based on user flow.
-    }
-
-    // Display Insight
-    if (result.insight) {
-        document.getElementById('insightContainer').classList.remove('hidden');
-        document.getElementById('insightWhy').textContent = result.insight.why_impact;
-        document.getElementById('insightHow').textContent = result.insight.how_action;
-    }
-
-    // Phase 5: Dynamic Audio Prescription
-    if (result.audio_prescription) {
-        renderAudioPrescription(result.audio_prescription);
-    }
-}
 
 function renderAudioPrescription(prescription) {
     const audioContainer = document.getElementById('audioPrescriptionContainer');
@@ -439,8 +340,7 @@ async function loadCorrelationData() {
         legendContainer.innerHTML = '';
 
         const keys = [
-            'tiktok_hours', 'youtube_hours', 'other_socials_hours',
-            'gaming_hours', 'academic_hours', 'pickups'
+            'social_media_hours', 'game_hours', 'academic_hours', 'pickups'
         ];
 
         const chartLabels = [];

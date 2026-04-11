@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScreenSense</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Fade and grow animation */
+        @keyframes splashAnim {
+            0% {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            30% {
+                opacity: 1;
+                transform: scale(1.05); /* Peak of the grow */
+            }
+            60% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1.1); /* Subtle grow outward as it fades into the app */
+            }
+        }
+
+        .splash-logo {
+            animation: splashAnim 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+    </style>
+</head>
+
+<body class="bg-[#050505] min-h-screen flex items-center justify-center m-0 overflow-hidden">
+
+    <!-- Splash Screen Container -->
+    <div class="flex flex-col items-center justify-center">
+        <!-- Logo Image -->
+        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="ScreenSense Logo" 
+             class="splash-logo w-48 h-48 object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+    </div>
+
+    <!-- Backend Authentication Router -->
+    <script>
+        // 1 second (1000ms) delay to let the animation play out
+        setTimeout(() => {
+            const isAuth = {{ 'true' if is_auth else 'false' }};
+            
+            if (isAuth) {
+                // Background session verification success -> Dashboard
+                window.location.replace("{{ url_for('main.dashboard') }}");
+            } else {
+                // Needs login
+                window.location.replace("{{ url_for('main.login_page', _external=True) }}");
+            }
+        }, 1100); // 1.1s to allow the fade out animation to finish before snapping 
+    </script>
+</body>
+
+</html>

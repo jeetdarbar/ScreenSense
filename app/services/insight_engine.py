@@ -13,26 +13,22 @@ class InsightEngine:
         """
         from app.services.text_engine import TextEngine
         
-        tiktok = log_data.tiktok_ig_hours
-        youtube = log_data.youtube_hours
-        other_socials = log_data.other_socials_hours
-        gaming = log_data.gaming_hours
-        
-        academic = log_data.academic_hours_after_bedtime
-        pickups = log_data.pickups_after_bedtime
+        apps = log_data.get_usage_list()
         
         # Get dynamic scientific explanation from TextEngine
-        impact_msg = TextEngine.generate_nightly_insight(tiktok, youtube, other_socials, gaming)
+        impact_msg = TextEngine.generate_nightly_insight(apps)
         
         # Keep action logic simple here, or move to TextEngine later if needed.
         # For now, just randomization or static advice based on the driver.
         action_msg = "Focus on a consistent wind-down routine."
         
-        total_social = tiktok + youtube + other_socials + gaming
+        total_social = sum(app.get('minutes', 0) for app in apps if app.get('category') == 'Social Media')
+        academic = log_data.academic_minutes_after_bedtime
+        pickups = log_data.pickups_after_bedtime
         
-        if total_social > 1.0:
+        if total_social > 60:
             action_msg = "Try 'bundling' leisure time earlier or use Grayscale Mode."
-        elif academic > 1.5:
+        elif academic > 90:
              action_msg = "Write a to-do list for tomorrow to offload cognitive tasks."
         elif pickups > 5:
              action_msg = "Turn on 'Do Not Disturb' or place phone face down."
@@ -48,10 +44,7 @@ class InsightEngine:
         Generates morning reinforcement and a dynamic action plan based on sleep onset latency and grogginess.
         """
         # Aggregate social for simplified reinforcement logic
-        total_social = (log_data.tiktok_ig_hours + 
-                       log_data.youtube_hours + 
-                       log_data.other_socials_hours + 
-                       log_data.gaming_hours)
+        total_social = sum(app.get('minutes', 0) for app in log_data.get_usage_list() if app.get('category') == 'Social Media')
 
         # Phase 4 Extract Grogginess (if passed, else default)
         # Note: routes.py passes minutes_to_sleep, we'll try to extract grogginess if available
@@ -60,9 +53,9 @@ class InsightEngine:
         
         # 1. Reinforcement (Positive Reinforcement)
         reinforcement = ""
-        if total_social < 0.5:
+        if total_social < 30:
              reinforcement = "Excellent control over social media reward loops last night."
-        elif getattr(log_data, 'academic_hours_after_bedtime', 0) < 0.5:
+        elif getattr(log_data, 'academic_minutes_after_bedtime', 0) < 30:
              reinforcement = "Great job managing cognitive load before bed."
         elif getattr(log_data, 'pickups_after_bedtime', 0) < 3:
              reinforcement = "Minimal sleep fragmentation detected. Good discipline."
@@ -116,10 +109,7 @@ class InsightEngine:
         
         # We also need to extract specifically which app was the problem, TextEngine handles this.
         return TextEngine.generate_morning_analysis(
-            daily_log.tiktok_ig_hours,
-            daily_log.youtube_hours,
-            daily_log.other_socials_hours,
-            daily_log.gaming_hours,
+            daily_log.get_usage_list(),
             time_to_sleep_mins,
             caffeine_mg,
             caffeine_modifiers,
@@ -135,12 +125,13 @@ class InsightEngine:
         Returns a dictionary with primary track info and alternative tracks.
         """
         usage = {
-            "Academic/Work": getattr(daily_log, 'academic_hours_after_bedtime', 0),
-            "Gaming": getattr(daily_log, 'gaming_hours', 0),
-            "TikTok/IG": getattr(daily_log, 'tiktok_ig_hours', 0),
-            "YouTube": getattr(daily_log, 'youtube_hours', 0),
-            "Other Socials": getattr(daily_log, 'other_socials_hours', 0)
+            "Academic/Work": getattr(daily_log, 'academic_minutes_after_bedtime', 0),
         }
+        
+        # Dynamically push highest apps
+        for app in daily_log.get_usage_list():
+            if app.get('minutes', 0) > usage.get(app.get('name'), 0):
+                usage[app.get('name')] = app.get('minutes', 0)
         
         # Determine highest driver
         highest_driver = max(usage, key=usage.get)
@@ -161,14 +152,11 @@ class InsightEngine:
         primary = get_track("brown_noise")
         reasoning = "Just a light ambient noise to help you transition into sleep."
         
-        if max_val >= 0.5:
+        if max_val >= 30:
             if highest_driver == "Academic/Work":
                 primary = get_track("binaural")
                 reasoning = "High Academic/Work hours detected. We prescribed Binaural Delta waves to help clear cortisol and physically slow your brainwaves down."
-            elif highest_driver == "Gaming":
-                primary = get_track("rhythm_60")
-                reasoning = "Late-night Gaming elevated your adrenaline and heart rate. This 60 BPM acoustic rhythm is designed to biologically trick your heart into slowing down to match its tempo."
-            elif highest_driver in ["TikTok/IG", "YouTube", "Other Socials"]:
+            else:
                 primary = get_track("nature")
                 reasoning = f"Extended {highest_driver} usage spiked your dopamine levels. Ambient Nature sounds provide soothing, unpredictable pink noise to calm the chemical noise in your brain."
 

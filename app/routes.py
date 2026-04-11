@@ -10,6 +10,10 @@ main = Blueprint('main', __name__)
 
 @main.route('/')
 def index():
+    return render_template('splash.html', is_auth=current_user.is_authenticated)
+
+@main.route('/login-page', endpoint='login_page')
+def login_page_view():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
     return render_template('auth.html')
@@ -70,7 +74,7 @@ def dashboard():
 
     log_count = DailyLog.query.filter_by(user_id=user.id).count()
             
-    return render_template('dashboard.html', needs_morning_checkin=needs_morning_checkin, log_count=log_count)
+    return render_template('dashboard.html', needs_morning_checkin=needs_morning_checkin, log_count=log_count, latest_log=latest_log)
 
 @main.route('/checkin', methods=['POST'])
 @login_required
@@ -87,12 +91,12 @@ def checkin():
             target_bedtime = data.get('target_bedtime', "23:00")
             
             # Platform Breakdown
-            tiktok_ig_hours = float(data.get('tiktok_ig_hours', 0))
-            youtube_hours = float(data.get('youtube_hours', 0))
-            other_socials_hours = float(data.get('other_socials_hours', 0))
-            gaming_hours = float(data.get('gaming_hours', 0))
+            tiktok_ig_minutes = int(data.get('tiktok_ig_minutes', 0))
+            youtube_minutes = int(data.get('youtube_minutes', 0))
+            other_socials_minutes = int(data.get('other_socials_minutes', 0))
+            gaming_minutes = int(data.get('gaming_minutes', 0))
             
-            academic_hours = float(data.get('academic_hours_after_bedtime', 0))
+            academic_minutes = int(data.get('academic_minutes_after_bedtime', 0))
             pickups = int(data.get('pickups_after_bedtime', 0))
             
             # Phase 4: Caffeine
@@ -109,15 +113,9 @@ def checkin():
         new_log = DailyLog(
             user_id=user_id,
             date=datetime.utcnow().date(),
-            # total_screen_hours removed
             target_bedtime=target_bedtime,
             
-            tiktok_ig_hours=tiktok_ig_hours,
-            youtube_hours=youtube_hours,
-            other_socials_hours=other_socials_hours,
-            gaming_hours=gaming_hours,
-            
-            academic_hours_after_bedtime=academic_hours,
+            academic_minutes_after_bedtime=academic_minutes,
             pickups_after_bedtime=pickups,
             
             caffeine_type=caffeine_type,
@@ -244,4 +242,65 @@ def get_correlations():
     analysis = AnalyticsEngine.calculate_behavioral_correlations(user_id)
     return jsonify(analysis)
 
-
+@main.route('/api/sync/usage', methods=['POST'])
+def sync_usage():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({'error': 'Missing or invalid Authorization header'}), 401
+    
+    token = auth_header.split(" ")[1]
+    user = User.query.filter_by(api_token=token).first()
+    if not user:
+        return jsonify({'error': 'Invalid API token'}), 401
+        
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No payload provided'}), 400
+        
+    try:
+        today = datetime.utcnow().date()
+        log = DailyLog.query.filter_by(user_id=user.id, date=today).first()
+        
+        # Extract precise minute telemetry
+        # Data is now a JSON Array of individual apps
+        import json
+        app_list = data if isinstance(data, list) else []
+        
+        if not log:
+            # First background sync of the night.
+            last_log = DailyLog.query.filter_by(user_id=user.id).order_by(DailyLog.id.desc()).first()
+            tb = getattr(last_log, 'target_bedtime', '23:00') if last_log else '23:00'
+            
+            log = DailyLog(
+                user_id=user.id,
+                date=today,
+                target_bedtime=tb,
+                app_usage_json=json.dumps(app_list),
+                academic_minutes_after_bedtime=0,
+                pickups_after_bedtime=0
+            )
+            db.session.add(log)
+        else:
+            # Update existing nightly log continuously
+            log.app_usage_json = json.dumps(app_list)
+            
+        db.session.commit() # Flush so risk engine can query previous logs safely
+        
+        # Dynamically recalculate risk using surrounding database knowledge
+        previous_logs = DailyLog.query.filter_by(user_id=user.id).order_by(DailyLog.date.desc()).limit(14).all()
+        risk_score = RiskEngine.calculate_risk_score(log, previous_logs)
+        log.risk_score = risk_score
+        log.risk_level = RiskEngine.get_risk_level(risk_score)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Automated usage synced successfully.',
+            'risk_score': round(risk_score, 2),
+            'risk_level': log.risk_level
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

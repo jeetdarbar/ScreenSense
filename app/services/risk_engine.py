@@ -2,8 +2,8 @@ import statistics
 
 class RiskEngine:
     # Thresholds
-    MAX_SOCIAL_HOURS = 5.0  # Increased to prevent saturation (was 2.0)
-    MAX_ACADEMIC_HOURS = 5.0 # Increased (was 3.0)
+    MAX_SOCIAL_MINUTES = 300.0  # Increased to prevent saturation (was 5.0 hours)
+    MAX_ACADEMIC_MINUTES = 300.0 # Increased (was 5.0 hours)
     MAX_PICKUPS = 15        # Increased (was 10)
     
     @staticmethod
@@ -18,57 +18,52 @@ class RiskEngine:
         - Consistency (Deviation): 10%
         """
         
+        # 1. Dynamic Categorical Impact
+        risk_score = 20.0 # Base risk
         
-        # 1. Social Impact (0.0 - 1.0)
-        # Aggregate all platform usage
-        total_social = (current_log.tiktok_ig_hours + 
-                       current_log.youtube_hours + 
-                       current_log.other_socials_hours + 
-                       current_log.gaming_hours)
+        total_social_minutes = 0
+        total_gaming_minutes = 0
         
-        social_score = min(total_social / RiskEngine.MAX_SOCIAL_HOURS, 1.0)
+        for app in current_log.get_usage_list():
+            cat = app.get('category', 'Other')
+            mins = app.get('minutes', 0)
+            
+            if cat == 'Social Media':
+                risk_score += (mins / 60.0) * 15.0  # 15 risk chunks per hour
+                total_social_minutes += mins
+            elif cat == 'Game':
+                risk_score += (mins / 60.0) * 12.0  # 12 risk chunks per hour
+                total_gaming_minutes += mins
+                
+        # 2. Academic Impact
+        risk_score += (min(current_log.academic_minutes_after_bedtime / RiskEngine.MAX_ACADEMIC_MINUTES, 1.0)) * 10.0
         
-        # 2. Academic Impact (0.0 - 1.0)
-        academic_score = min(current_log.academic_hours_after_bedtime / RiskEngine.MAX_ACADEMIC_HOURS, 1.0)
-        
-        # 3. Fragmentation (0.0 - 1.0)
-        fragmentation_score = min(current_log.pickups_after_bedtime / RiskEngine.MAX_PICKUPS, 1.0)
+        # 3. Fragmentation
+        risk_score += (min(current_log.pickups_after_bedtime / RiskEngine.MAX_PICKUPS, 1.0)) * 20.0
         
         # 4. Consistency (Sleep Deviation)
-        consistency_score = 0.0
+        consistency_penalty = 0.0
         if len(previous_logs) > 1:
-             # Calculate total late hours for today
-             current_late = total_social + current_log.academic_hours_after_bedtime
+             current_late = total_social_minutes + total_gaming_minutes + current_log.academic_minutes_after_bedtime
              
              prev_late = []
              for log in previous_logs:
-                 # Helper to safely sum social hours if they exist (backward compatibility or new model)
-                 # Assuming migration or fresh DB, so new model fields apply.
-                 # Optimistically assuming fresh start for prototype.
-                 p_social = (getattr(log, 'tiktok_ig_hours', 0) + 
-                             getattr(log, 'youtube_hours', 0) + 
-                             getattr(log, 'other_socials_hours', 0) + 
-                             getattr(log, 'gaming_hours', 0))
-                 
-                 # Fallback for old 'social_hours_after_bedtime' if mix of records?
-                 # Given we are refactoring, we'll assume new structure.
-                 
-                 prev_late.append(p_social + log.academic_hours_after_bedtime)
+                 p_social = 0
+                 # Support dynamically scanning historical logs too!
+                 for p_app in log.get_usage_list():
+                     if p_app.get('category') in ['Social Media', 'Game']:
+                         p_social += p_app.get('minutes', 0)
+                 prev_late.append(p_social + getattr(log, 'academic_minutes_after_bedtime', 0))
             
              if prev_late:
                  avg_late = statistics.mean(prev_late)
-                 if current_late > (avg_late + 1.0):
-                     consistency_score = 1.0
+                 if current_late > (avg_late + 60.0): # 60 minutes deviation
+                     consistency_penalty = 10.0
+                     
+        risk_score += consistency_penalty
         
-        # Weighted Sum
-        # Increased Social Weight slightly due to high-dopamine nature of new platforms?
-        # Keeping original weights for now.
-        raw_score = (0.5 * social_score) + \
-                    (0.2 * academic_score) + \
-                    (0.2 * fragmentation_score) + \
-                    (0.1 * consistency_score)
-                    
-        return round(raw_score * 100, 2)
+        # Cap at 100
+        return round(min(risk_score, 100.0), 2)
 
     @staticmethod
     def get_risk_level(score):
@@ -82,25 +77,24 @@ class RiskEngine:
     @staticmethod
     def calculate_stability_index(previous_logs):
         """
-        Calculates stability based on low variance in 'late hours'.
+        Calculates stability based on low variance in 'late minutes'.
         """
         if not previous_logs:
             return 100.0
             
-        late_hours = []
+        late_minutes = []
         for log in previous_logs:
-            # Handle potential missing attributes if old logs exist (though we reset DB)
-            p_social = ((getattr(log, 'tiktok_ig_hours', 0.0) or 0.0) + 
-                        (getattr(log, 'youtube_hours', 0.0) or 0.0) + 
-                        (getattr(log, 'other_socials_hours', 0.0) or 0.0) + 
-                        (getattr(log, 'gaming_hours', 0.0) or 0.0))
-            late_hours.append(p_social + log.academic_hours_after_bedtime)
+            p_social = 0
+            for app in log.get_usage_list():
+                if app.get('category') in ['Social Media', 'Game']:
+                    p_social += app.get('minutes', 0)
+            late_minutes.append(p_social + getattr(log, 'academic_minutes_after_bedtime', 0))
         
-        if len(late_hours) < 2:
+        if len(late_minutes) < 2:
             return 100.0
             
-        stdev = statistics.stdev(late_hours)
-        # Normalize: Standard deviation. Reduced penalty factor to 20 (was 50).
-        # SD of 1 hour = 80 Stability. SD of 5 hours = 0 Stability.
-        stability = max(0, 100 - (stdev * 20))
+        stdev = statistics.stdev(late_minutes)
+        # Normalize: Standard deviation. 
+        # SD of 60 minutes = 80 Stability. 
+        stability = max(0, 100 - (stdev * (20.0/60.0)))
         return round(stability, 2)

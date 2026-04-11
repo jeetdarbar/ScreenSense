@@ -43,26 +43,20 @@ class TextEngine:
     # Structure: {Mechanism} -> {Impact}
     # Goal: Long, educational, simple English.
     
-    RC_MECHANISMS = {
-        "TikTok/IG": [
+        "Social Media": [
             "The endless scroll created a loop of 'hyper-stimulation',",
-            "The rapid visual cuts and bright colors of vertical videos",
+            "The rapid visual cuts and bright colors of social feeds",
             "Getting continuous small hits of dopamine from scrolling"
         ],
-        "YouTube": [
-            "The seamless flow of one video into the next",
-            "The algorithm's ability to keep you watching without effort",
-            "Constantly processing visual stories and information"
-        ],
-        "Gaming": [
+        "Game": [
             "The rush of adrenaline from playing an interactive game",
             "The high-intensity focus you needed to play",
             "The competitive and fast-paced nature of the game"
         ],
-        "Other Socials": [
+        "Other": [
             "Hunting for new information and reading updates",
-            "The mental effort required to read and process text",
-            "The stop-and-start rhythm of checking different apps"
+            "The mental effort required to process the screen",
+            "The stop-and-start rhythm of checking apps"
         ]
     }
     
@@ -82,34 +76,41 @@ class TextEngine:
     }
 
     @staticmethod
-    def generate_nightly_insight(tiktok, youtube, other_socials, gaming):
+    def generate_nightly_insight(apps):
         """
         Returns a detailed, simplified explanation based on the primary platform driver.
         """
-        usage = {"TikTok/IG": tiktok, "YouTube": youtube, "Other Socials": other_socials, "Gaming": gaming}
-        driver = max(usage, key=usage.get)
-        max_val = usage[driver]
-        
-        if max_val < 0.2:
+        if not apps:
              return "Your digital footprint is minimal. This is great! Your circadian rhythm (body clock) is protected from the interference of algorithms, allowing you to sleep naturally."
 
-        if driver == "TikTok/IG": return random.choice(TextEngine.VOCAB_TIKTOK_IG)
-        elif driver == "YouTube": return random.choice(TextEngine.VOCAB_YOUTUBE)
-        elif driver == "Other Socials": return random.choice(TextEngine.VOCAB_REDDIT_X) # Keep vocab but map to new name
-        elif driver == "Gaming": return random.choice(TextEngine.VOCAB_GAMING)
+        highest_app = max(apps, key=lambda a: a.get('minutes', 0))
+        driver_name = highest_app.get('name', 'Unknown')
+        category = highest_app.get('category', 'Other')
+        max_val = highest_app.get('minutes', 0)
+        
+        if max_val < 15:
+             return "Your digital footprint is minimal. This is great! Your circadian rhythm (body clock) is protected from the interference of algorithms, allowing you to sleep naturally."
+
+        if category == "Social Media": 
+            return f"Because you used {driver_name}: " + random.choice(TextEngine.VOCAB_TIKTOK_IG)
+        elif category == "Game": 
+            return f"Playing {driver_name}: " + random.choice(TextEngine.VOCAB_GAMING)
             
-        return "Digital consumption detected. Monitor your screen time to protect sleep quality."
+        return f"Digital consumption via {driver_name} detected. Monitor your screen time to protect sleep quality."
 
     @staticmethod
-    def generate_morning_analysis(tiktok, youtube, other_socials, gaming, minutes_to_sleep, active_caffeine_mg=0, caffeine_modifiers=False, grogginess_score=1):
+    def generate_morning_analysis(apps, minutes_to_sleep, active_caffeine_mg=0, caffeine_modifiers=False, grogginess_score=1):
         """
         Generates a detailed, non-repetitive Root Cause Analysis in simple English.
-        Now includes Phase 4 Caffeine and Sleep Inertia logic.
         """
-        usage = {"TikTok/IG": tiktok, "YouTube": youtube, "Other Socials": other_socials, "Gaming": gaming}
-        driver = max(usage, key=usage.get)
-        max_val = usage[driver]
-        total_usage = sum(usage.values())
+        if not apps:
+            return "No massive screen usage detected! Your circadian sync is perfect."
+            
+        highest_app = max(apps, key=lambda a: a.get('minutes', 0))
+        driver = highest_app.get('name', 'your phone')
+        category = highest_app.get('category', 'Other')
+        max_val = highest_app.get('minutes', 0)
+        total_usage = sum(app.get('minutes', 0) for app in apps)
         
         # Phase 4: 1. Caffeine Load Check (Highest Priority Override)
         if active_caffeine_mg > 25:
@@ -122,26 +123,26 @@ class TextEngine:
             return base_msg
 
         # 2. Multi-Factor "Overload" Detection
-        if total_usage > 3.0:
-            return (f"⚠️ DOPAMINE BURNOUT: You spent a total of {total_usage:.1f} hours on screens. "
+        if total_usage > 180:
+            return (f"⚠️ DOPAMINE BURNOUT: You spent a total of {total_usage} minutes on screens. "
                     f"This creates a huge 'Stimulation Debt' for your brain. "
                     f"Even if you felt physically tired, your mind was chemically too loud and active to sleep peacefully. "
                     f"It's like trying to park a car that's moving at 100 miles per hour.")
 
         # Phase 4: 3. Sleep Inertia (Grogginess) Correlation Check
-        if grogginess_score >= 7 and max_val > 1.0 and minutes_to_sleep < 30:
+        if grogginess_score >= 7 and max_val > 60 and minutes_to_sleep < 30:
             return (f"🧠 ARCHITECTURE COLLAPSE: Interestingly, {driver} didn't delay your sleep onset much ({minutes_to_sleep}m), "
                     f"but it has a massive correlation with your severe morning brain fog (Score: {grogginess_score}/10). "
                     f"This indicates your deep REM sleep architecture was compromised by screen glare, giving you 'junk sleep'.")
 
         # 4. Crash Detection (Fast Sleep + High Usage)
-        if minutes_to_sleep < 15 and max_val > 1.5:
+        if minutes_to_sleep < 15 and max_val > 90:
              return (f"⚠️ EXHAUSTION MASK: You fell asleep very quickly ({minutes_to_sleep}m), but this isn't necessarily healthy. "
-                     f"Using {driver} for {max_val}h likely caused you to 'crash' from exhaustion rather than drift off naturally. "
+                     f"Using {driver} for {max_val}m likely caused you to 'crash' from exhaustion rather than drift off naturally. "
                      f"This leads to 'Sleep Inertia', where you wake up feeling groggy because your sleep quality was poor.")
                      
         # 5. Validation (Low Usage + Fast Sleep + Low Grogginess)
-        if max_val < 0.5 and minutes_to_sleep < 20 and grogginess_score <= 3:
+        if max_val < 30 and minutes_to_sleep < 20 and grogginess_score <= 3:
             return (f"✅ CIRCADIAN SYNC: Because you had minimal interference from {driver}, your natural 'sleep pressure' worked correctly. "
                     f"Falling asleep in {minutes_to_sleep}m with high morning alertness is a great sign that your routine is perfectly synced.")
 
@@ -156,9 +157,9 @@ class TextEngine:
             prefix = "⚠️ DELAYED ONSET: "
         else:
             # Fallback for moderate usage + normal sleep (15-30m)
-            return (f"⚖️ BALANCED: Your usage of {driver} ({max_val}h) was tolerated well by your body tonight. "
+            return (f"⚖️ BALANCED: Your usage of {driver} ({max_val}m) was tolerated well by your body tonight. "
                     f"Your sleep onset of {minutes_to_sleep}m is normal. However, be careful, as you are at the limit. "
                     f"If you wake up feeling groggy, try cutting back slightly tomorrow.")
 
-        return f"{prefix}{mechanism} ({max_val}h) {impact}"
+        return f"{prefix}{mechanism} ({max_val}m) {impact}"
 

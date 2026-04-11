@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 from . import db
 from flask_login import UserMixin
@@ -9,6 +10,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    api_token = db.Column(db.String(64), unique=True, index=True, default=lambda: secrets.token_hex(32))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationship
@@ -34,14 +36,10 @@ class DailyLog(db.Model):
     target_bedtime = db.Column(db.String(10), nullable=False) # e.g. "23:30"
     
     # After Bedtime Breakdown
-    # Refactored: Specific Platform Tracking
-    tiktok_ig_hours = db.Column(db.Float, default=0.0) # Short-form video
-    youtube_hours = db.Column(db.Float, default=0.0)   # Long-form/Autoplay
-    other_socials_hours = db.Column(db.Float, default=0.0)  # Text foraging / Other (was Reddit/X)
-    gaming_hours = db.Column(db.Float, default=0.0)    # Interactive media
+    # Refactored: Dynamic individualized app tracking
+    app_usage_json = db.Column(db.Text, nullable=True) # JSON Array of dicts [{"name":"...", "category":"...", "minutes":...}]
     
-    # social_hours_after_bedtime removed (conceptually split above)
-    academic_hours_after_bedtime = db.Column(db.Float, nullable=False) # Productive/Study
+    academic_minutes_after_bedtime = db.Column(db.Integer, default=0, nullable=False) # Productive/Study
     pickups_after_bedtime = db.Column(db.Integer, nullable=False) # Unlock count
     
     # Calculated / Risk Fields
@@ -56,6 +54,15 @@ class DailyLog(db.Model):
     
     # Relationship for feedback
     feedback = db.relationship('InterventionFeedback', backref='daily_log', uselist=False, lazy=True)
+
+    def get_usage_list(self):
+        import json
+        if not self.app_usage_json:
+            return []
+        try:
+            return json.loads(self.app_usage_json)
+        except:
+            return []
 
     def __repr__(self):
         return f'<DailyLog {self.date} Score:{self.risk_score}>'
