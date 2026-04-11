@@ -254,7 +254,7 @@ def sync_usage():
         return jsonify({'error': 'Invalid API token'}), 401
         
     data = request.json
-    if not data:
+    if data is None:
         return jsonify({'error': 'No payload provided'}), 400
         
     try:
