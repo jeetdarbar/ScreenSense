@@ -43,6 +43,7 @@ class TextEngine:
     # Structure: {Mechanism} -> {Impact}
     # Goal: Long, educational, simple English.
     
+    RC_MECHANISMS = {
         "Social Media": [
             "The endless scroll created a loop of 'hyper-stimulation',",
             "The rapid visual cuts and bright colors of social feeds",
@@ -147,7 +148,7 @@ class TextEngine:
                     f"Falling asleep in {minutes_to_sleep}m with high morning alertness is a great sign that your routine is perfectly synced.")
 
         # 6. Latency Analysis (The Core Logic)
-        mechanism = random.choice(TextEngine.RC_MECHANISMS.get(driver, ["using screens"]))
+        mechanism = random.choice(TextEngine.RC_MECHANISMS.get(category, ["using screens"]))
         
         if minutes_to_sleep > 60:
             impact = random.choice(TextEngine.RC_IMPACTS["Severe"])
