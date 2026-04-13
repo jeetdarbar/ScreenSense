@@ -83,3 +83,13 @@ class InterventionFeedback(db.Model):
 
     def __repr__(self):
         return f'<Feedback {self.daily_log_id} Time:{self.time_to_fall_asleep_mins}>'
+
+class AppCategoryMap(db.Model):
+    __tablename__ = 'app_category_map'
+    id = db.Column(db.Integer, primary_key=True)
+    package_name = db.Column(db.String(150), unique=True, nullable=False, index=True) # e.g. com.instagram.android
+    category = db.Column(db.String(50), nullable=False) # e.g. "Social Media", "Game", "Other"
+    readable_name = db.Column(db.String(100), nullable=True) # e.g. "Instagram"
+    
+    def __repr__(self):
+        return f'<AppCategoryMap {self.package_name}:{self.category}>'

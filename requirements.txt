@@ -16,3 +16,4 @@ alembic==1.18.3
 imbalanced-learn==0.14.1
 google-generativeai
 psycopg2-binary==2.9.9
+Flask-JWT-Extended

@@ -1,11 +1,11 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
+from flask_jwt_extended import JWTManager
 import os
 
 # Initialize extension
 db = SQLAlchemy()
-login_manager = LoginManager()
+jwt = JWTManager()
 
 def create_app():
     app = Flask(__name__)
@@ -25,22 +25,38 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = 'dev-secret-key' # Change for production
 
+    app.config['JWT_SECRET_KEY'] = 'jwt-super-secret-key-change-for-prod'
+
     # Initialize extensions
     db.init_app(app)
-    login_manager.init_app(app)
-    login_manager.login_view = 'main.login'
-    login_manager.login_message_category = 'info'
+    jwt.init_app(app)
 
     # Import models to ensure they are registered with SQLAlchemy
     from . import models
 
-    @login_manager.user_loader
-    def load_user(user_id):
-        return models.User.query.get(int(user_id))
-
     # Create tables within app context
     with app.app_context():
         db.create_all()
+        
+        # Seed fundamental App Categories if missing
+        seed_data = [
+            {"package": "com.instagram.android", "category": "Social Media", "name": "Instagram"},
+            {"package": "com.facebook.katana", "category": "Social Media", "name": "Facebook"},
+            {"package": "com.reddit.frontpage", "category": "Social Media", "name": "Reddit"},
+            {"package": "com.snapchat.android", "category": "Social Media", "name": "Snapchat"},
+            {"package": "com.twitter.android", "category": "Social Media", "name": "X/Twitter"},
+            {"package": "com.zhiliaoapp.musically", "category": "Social Media", "name": "TikTok"}
+        ]
+        
+        for app_data in seed_data:
+            if not models.AppCategoryMap.query.filter_by(package_name=app_data["package"]).first():
+                new_app = models.AppCategoryMap(
+                    package_name=app_data["package"],
+                    category=app_data["category"],
+                    readable_name=app_data["name"]
+                )
+                db.session.add(new_app)
+        db.session.commit()
 
     # Register Blueprints
     from .routes import main as main_blueprint
