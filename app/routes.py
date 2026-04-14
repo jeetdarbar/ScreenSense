@@ -10,6 +10,10 @@ import json
 
 main = Blueprint('main', __name__)
 
+@main.route('/api/v1/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok', 'message': 'ScreenSense Backend Live'}), 200
+
 def get_current_dashboard_state(user):
     # SELF-HEALING: Ensure columns exist if accessed (Granular Recovery)
     from sqlalchemy import text
@@ -67,34 +71,44 @@ def get_current_dashboard_state(user):
 
 @main.route('/api/v1/auth/register', methods=['POST'])
 def register():
-    data = request.json
-    username = data.get('username')
-    email = data.get('email')
-    password = data.get('password')
-    
-    if User.query.filter_by(email=email).first() or User.query.filter_by(username=username).first():
-        return jsonify({'error': 'User already exists'}), 400
+    try:
+        data = request.json
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
         
-    new_user = User(username=username, email=email)
-    new_user.set_password(password)
-    db.session.add(new_user)
-    db.session.commit()
-    
-    access_token = create_access_token(identity=str(new_user.id))
-    return jsonify({'access_token': access_token, 'user_id': new_user.id, 'username': new_user.username}), 201
+        if User.query.filter_by(email=email).first() or User.query.filter_by(username=username).first():
+            return jsonify({'error': 'User already exists'}), 400
+            
+        new_user = User(username=username, email=email)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        
+        access_token = create_access_token(identity=str(new_user.id))
+        return jsonify({'access_token': access_token, 'user_id': new_user.id, 'username': new_user.username}), 201
+    except Exception as e:
+        print(f"[AUTH ERROR] Register failed: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @main.route('/api/v1/auth/login', methods=['POST'])
 def login():
-    data = request.json
-    email = data.get('email')
-    password = data.get('password')
-    
-    user = User.query.filter_by(email=email).first()
-    if user and user.check_password(password):
-        access_token = create_access_token(identity=str(user.id))
-        return jsonify({'access_token': access_token, 'user_id': user.id, 'username': user.username}), 200
+    try:
+        data = request.json
+        email = data.get('email')
+        password = data.get('password')
         
-    return jsonify({'error': 'Invalid email or password'}), 401
+        user = User.query.filter_by(email=email).first()
+        if user and user.check_password(password):
+            access_token = create_access_token(identity=str(user.id))
+            return jsonify({'access_token': access_token, 'user_id': user.id, 'username': user.username}), 200
+            
+        return jsonify({'error': 'Invalid email or password'}), 401
+    except Exception as e:
+        print(f"[AUTH ERROR] Login failed: {e}")
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @main.route('/api/v1/user/settings', methods=['GET', 'PUT'])
 @jwt_required()
