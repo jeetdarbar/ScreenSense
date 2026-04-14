@@ -11,6 +11,21 @@ import json
 main = Blueprint('main', __name__)
 
 def get_current_dashboard_state(user):
+    # SELF-HEALING: Ensure columns exist if accessed
+    try:
+        test = user.target_bedtime
+    except AttributeError:
+        print("[BACKEND] Detected missing columns. Repairing...")
+        from sqlalchemy import text
+        try:
+            db.session.execute(text("ALTER TABLE user ADD COLUMN target_bedtime VARCHAR(10) DEFAULT '23:00'"))
+            db.session.execute(text("ALTER TABLE user ADD COLUMN target_wake_time VARCHAR(10) DEFAULT '07:00'"))
+            db.session.commit()
+            print("[BACKEND] Migration successful.")
+        except Exception as e:
+            print(f"[BACKEND] Migration failed: {e}")
+            db.session.rollback()
+
     now = datetime.utcnow() + timedelta(hours=5, minutes=30) #IST
     current_time_str = now.strftime('%H:%M')
     
