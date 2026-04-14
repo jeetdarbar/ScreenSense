@@ -131,6 +131,7 @@ class TextEngine:
 
         highest_app = max(apps, key=lambda a: a.get('minutes', 0))
         driver = highest_app.get('name', 'your phone')
+        category = highest_app.get('category', 'Other')
         max_val = highest_app.get('minutes', 0)
         intensity = int(weighted_sum)
         
