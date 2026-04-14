@@ -61,10 +61,17 @@ def create_app():
         except Exception:
             db.session.rollback()
 
-        # 3. DailyLog Table (MANDATORY for Morning Report)
+        # 3. DailyLog Table (COMPREHENSIVE REPAIR)
         cols_log = [
             ("target_bedtime", "VARCHAR(10) DEFAULT '23:00'"),
-            ("target_wake_time", "VARCHAR(10) DEFAULT '07:00'")
+            ("target_wake_time", "VARCHAR(10) DEFAULT '07:00'"),
+            ("app_usage_json", "TEXT"),
+            ("risk_usage_json", "TEXT"),
+            ("academic_minutes_after_bedtime", "INTEGER DEFAULT 0"),
+            ("pickups_after_bedtime", "INTEGER DEFAULT 0"),
+            ("risk_score", "FLOAT"),
+            ("risk_level", "VARCHAR(20)"),
+            ("report_json", "TEXT")
         ]
         for col, definition in cols_log:
             try:
