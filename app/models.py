@@ -13,6 +13,10 @@ class User(UserMixin, db.Model):
     api_token = db.Column(db.String(64), unique=True, index=True, default=lambda: secrets.token_hex(32))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Global Settings
+    target_bedtime = db.Column(db.String(10), nullable=False, default='23:00')
+    target_wake_time = db.Column(db.String(10), nullable=False, default='07:00')
+    
     # Relationship
     logs = db.relationship('DailyLog', backref='user', lazy=True)
 
@@ -32,12 +36,12 @@ class DailyLog(db.Model):
     date = db.Column(db.Date, default=datetime.utcnow, nullable=False)
     
     # Refactored Input Features
-    # total_screen_hours removed
-    target_bedtime = db.Column(db.String(10), nullable=False) # e.g. "23:30"
+    target_bedtime = db.Column(db.String(10), nullable=False) # Snapshot of settings at cycle start
+    target_wake_time = db.Column(db.String(10), nullable=False, default='07:00')
     
     # After Bedtime Breakdown
-    # Refactored: Dynamic individualized app tracking
-    app_usage_json = db.Column(db.Text, nullable=True) # JSON Array of dicts [{"name":"...", "category":"...", "minutes":...}]
+    app_usage_json = db.Column(db.Text, nullable=True) # Full Daily Usage for List Display
+    risk_usage_json = db.Column(db.Text, nullable=True) # Subset for Risk Calculation
     
     academic_minutes_after_bedtime = db.Column(db.Integer, default=0, nullable=False) # Productive/Study
     pickups_after_bedtime = db.Column(db.Integer, nullable=False) # Unlock count
@@ -52,20 +56,27 @@ class DailyLog(db.Model):
     caffeine_time = db.Column(db.String(10), nullable=True) # HH:MM format
     active_caffeine_mg = db.Column(db.Float, nullable=True, default=0.0)
     
+    # Store the Gemini Generated Analysis for high-speed historical browsing
+    report_json = db.Column(db.Text, nullable=True) # JSON: {"reinforcement": "...", "analysis": "...", "action_plan": "..."}
+    
     # Relationship for feedback
     feedback = db.relationship('InterventionFeedback', backref='daily_log', uselist=False, lazy=True)
 
     def get_usage_list(self):
         import json
-        if not self.app_usage_json:
-            return []
-        try:
-            return json.loads(self.app_usage_json)
-        except:
-            return []
+        if not self.app_usage_json: return []
+        try: return json.loads(self.app_usage_json)
+        except: return []
+
+    def get_risk_usage_list(self):
+        import json
+        if not self.risk_usage_json: return []
+        try: return json.loads(self.risk_usage_json)
+        except: return []
 
     def __repr__(self):
         return f'<DailyLog {self.date} Score:{self.risk_score}>'
+
 
 class InterventionFeedback(db.Model):
     __tablename__ = 'intervention_feedback'
@@ -75,6 +86,7 @@ class InterventionFeedback(db.Model):
     # Compliance Data
     time_to_fall_asleep_mins = db.Column(db.Integer, nullable=False) # User reported minutes
     morning_grogginess_score = db.Column(db.Integer, nullable=True) # Phase 4: 1-10 scale
+    actual_wake_time = db.Column(db.String(10), nullable=True) # HH:MM format
     
     compliance_score = db.Column(db.Float, nullable=True) # Normalized score of compliance
     intervention_type = db.Column(db.String(50), nullable=True) # E.g., "5-min breathing", "10-min journaling"

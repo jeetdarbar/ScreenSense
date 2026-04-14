@@ -20,6 +20,7 @@ def get_current_dashboard_state(user):
         try:
             db.session.execute(text("ALTER TABLE user ADD COLUMN target_bedtime VARCHAR(10) DEFAULT '23:00'"))
             db.session.execute(text("ALTER TABLE user ADD COLUMN target_wake_time VARCHAR(10) DEFAULT '07:00'"))
+            db.session.execute(text("ALTER TABLE intervention_feedback ADD COLUMN actual_wake_time VARCHAR(10)"))
             db.session.commit()
             print("[BACKEND] Migration successful.")
         except Exception as e:
@@ -204,14 +205,21 @@ def morning_report():
         
     time_to_asleep = int(data.get('time_to_fall_asleep_mins', 0))
     groggy_score = int(data.get('morning_grogginess_score', 1))
+    wake_time = data.get('actual_wake_time', '07:00')
     
     feedback = InterventionFeedback.query.filter_by(daily_log_id=latest_log.id).first()
     if not feedback:
-        feedback = InterventionFeedback(daily_log_id=latest_log.id, time_to_fall_asleep_mins=time_to_asleep, morning_grogginess_score=groggy_score)
+        feedback = InterventionFeedback(
+            daily_log_id=latest_log.id, 
+            time_to_fall_asleep_mins=time_to_asleep, 
+            morning_grogginess_score=groggy_score,
+            actual_wake_time=wake_time
+        )
         db.session.add(feedback)
     else:
         feedback.time_to_fall_asleep_mins = time_to_asleep
         feedback.morning_grogginess_score = groggy_score
+        feedback.actual_wake_time = wake_time
     
     # Generate Insight from Gemini
     morning_summary = InsightEngine.generate_morning_report(latest_log, time_to_asleep)
