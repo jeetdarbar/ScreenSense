@@ -252,10 +252,10 @@ def morning_report():
         apps = json.loads(latest_log.apps_usage_json) if latest_log.apps_usage_json else []
         
         # 2. Generate Insight from TextEngine
-        analysis = InsightEngine.generate_morning_analysis(
-            apps=apps,
-            minutes_to_sleep=time_to_asleep,
-            grogginess_score=groggy_score
+        analysis = InsightEngine.generate_root_cause_analysis(
+            latest_log, 
+            time_to_asleep, 
+            groggy_score
         )
         
         report_data = {
