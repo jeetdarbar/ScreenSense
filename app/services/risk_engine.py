@@ -24,14 +24,14 @@ class RiskEngine:
         total_social_minutes = 0
         total_gaming_minutes = 0
         
-        for app in current_log.get_usage_list():
+        for app in current_log.get_risk_usage_list():
             cat = app.get('category', 'Other')
             mins = app.get('minutes', 0)
             
-            if cat == 'Social Media':
+            if cat == 'Social' or cat == 'Social Media':
                 risk_score += (mins / 60.0) * 15.0  # 15 risk chunks per hour
                 total_social_minutes += mins
-            elif cat == 'Game':
+            elif cat == 'Games' or cat == 'Game':
                 risk_score += (mins / 60.0) * 12.0  # 12 risk chunks per hour
                 total_gaming_minutes += mins
                 
@@ -50,8 +50,8 @@ class RiskEngine:
              for log in previous_logs:
                  p_social = 0
                  # Support dynamically scanning historical logs too!
-                 for p_app in log.get_usage_list():
-                     if p_app.get('category') in ['Social Media', 'Game']:
+                 for p_app in log.get_risk_usage_list():
+                     if p_app.get('category') in ['Social', 'Social Media', 'Games', 'Game']:
                          p_social += p_app.get('minutes', 0)
                  prev_late.append(p_social + getattr(log, 'academic_minutes_after_bedtime', 0))
             
@@ -85,8 +85,8 @@ class RiskEngine:
         late_minutes = []
         for log in previous_logs:
             p_social = 0
-            for app in log.get_usage_list():
-                if app.get('category') in ['Social Media', 'Game']:
+            for app in log.get_risk_usage_list():
+                if app.get('category') in ['Social', 'Social Media', 'Games', 'Game']:
                     p_social += app.get('minutes', 0)
             late_minutes.append(p_social + getattr(log, 'academic_minutes_after_bedtime', 0))
         
