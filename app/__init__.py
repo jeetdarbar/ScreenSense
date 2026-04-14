@@ -39,29 +39,36 @@ def create_app():
         db.create_all()
         
         # SELF-HEALING: Patch existing tables with missing columns
-        from sqlalchemy import text
+        from sqlalchemy import text, inspect
+        inspector = inspect(db.engine)
+
         # 1. User Table
+        existing_user_cols = [c['name'] for c in inspector.get_columns('user')]
         cols_user = [
             ("target_bedtime", "VARCHAR(10) DEFAULT '23:00'"),
             ("target_wake_time", "VARCHAR(10) DEFAULT '07:00'")
         ]
         for col, definition in cols_user:
-            try:
-                db.session.execute(text(f"ALTER TABLE user ADD COLUMN {col} {definition}"))
-                db.session.commit()
-                print(f"[BOOT] Added missing column {col} to User table.")
-            except Exception:
-                db.session.rollback()
+            if col not in existing_user_cols:
+                try:
+                    db.session.execute(text(f"ALTER TABLE user ADD COLUMN {col} {definition}"))
+                    db.session.commit()
+                    print(f"[BOOT] Added missing column {col} to User table.")
+                except Exception:
+                    db.session.rollback()
         
         # 2. Feedback Table
-        try:
-            db.session.execute(text("ALTER TABLE intervention_feedback ADD COLUMN actual_wake_time VARCHAR(10)"))
-            db.session.commit()
-            print("[BOOT] Added missing column actual_wake_time to Feedback table.")
-        except Exception:
-            db.session.rollback()
+        existing_feedback_cols = [c['name'] for c in inspector.get_columns('intervention_feedback')]
+        if "actual_wake_time" not in existing_feedback_cols:
+            try:
+                db.session.execute(text("ALTER TABLE intervention_feedback ADD COLUMN actual_wake_time VARCHAR(10)"))
+                db.session.commit()
+                print("[BOOT] Added missing column actual_wake_time to Feedback table.")
+            except Exception:
+                db.session.rollback()
 
-        # 3. DailyLog Table (COMPREHENSIVE REPAIR)
+        # 3. DailyLog Table (ATOMIC SMART REPAIR)
+        existing_log_cols = [c['name'] for c in inspector.get_columns('daily_log')]
         cols_log = [
             ("target_bedtime", "VARCHAR(10) DEFAULT '23:00'"),
             ("target_wake_time", "VARCHAR(10) DEFAULT '07:00'"),
@@ -73,13 +80,16 @@ def create_app():
             ("risk_level", "VARCHAR(20)"),
             ("report_json", "TEXT")
         ]
+        
         for col, definition in cols_log:
-            try:
-                db.session.execute(text(f"ALTER TABLE daily_log ADD COLUMN {col} {definition}"))
-                db.session.commit()
-                print(f"[BOOT] Added missing column {col} to DailyLog table.")
-            except Exception:
-                db.session.rollback()
+            if col not in existing_log_cols:
+                try:
+                    db.session.execute(text(f"ALTER TABLE daily_log ADD COLUMN {col} {definition}"))
+                    db.session.commit()
+                    print(f"[BOOT] Managed missing column: {col}")
+                except Exception as e:
+                    db.session.rollback()
+                    print(f"[BOOT ERROR] Failed to add {col}: {e}")
 
         # Seed fundamental App Categories if missing
         seed_data = [
