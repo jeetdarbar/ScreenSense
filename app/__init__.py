@@ -38,6 +38,29 @@ def create_app():
     with app.app_context():
         db.create_all()
         
+        # SELF-HEALING: Patch existing tables with missing columns
+        from sqlalchemy import text
+        # 1. User Table
+        cols_user = [
+            ("target_bedtime", "VARCHAR(10) DEFAULT '23:00'"),
+            ("target_wake_time", "VARCHAR(10) DEFAULT '07:00'")
+        ]
+        for col, definition in cols_user:
+            try:
+                db.session.execute(text(f"ALTER TABLE user ADD COLUMN {col} {definition}"))
+                db.session.commit()
+                print(f"[BOOT] Added missing column {col} to User table.")
+            except Exception:
+                db.session.rollback()
+        
+        # 2. Feedback Table
+        try:
+            db.session.execute(text("ALTER TABLE intervention_feedback ADD COLUMN actual_wake_time VARCHAR(10)"))
+            db.session.commit()
+            print("[BOOT] Added missing column actual_wake_time to Feedback table.")
+        except Exception:
+            db.session.rollback()
+
         # Seed fundamental App Categories if missing
         seed_data = [
             {"package": "com.instagram.android", "category": "Social Media", "name": "Instagram"},
