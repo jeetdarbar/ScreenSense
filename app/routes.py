@@ -72,25 +72,31 @@ def login():
 @main.route('/api/v1/user/settings', methods=['GET', 'PUT'])
 @jwt_required()
 def user_settings():
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    if request.method == 'PUT':
-        data = request.json
-        if 'username' in data: user.username = data['username']
-        if 'password' in data: user.set_password(data['password'])
-        if 'target_bedtime' in data: user.target_bedtime = data['target_bedtime']
-        if 'target_wake_time' in data: user.target_wake_time = data['target_wake_time']
-        db.session.commit()
+    import traceback
+    try:
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
         
-    return jsonify({
-        'username': user.username,
-        'email': user.email,
-        'target_bedtime': user.target_bedtime,
-        'target_wake_time': user.target_wake_time
-    }), 200
+        if request.method == 'PUT':
+            data = request.json
+            if 'username' in data: user.username = data['username']
+            if 'password' in data: user.set_password(data['password'])
+            if 'target_bedtime' in data: user.target_bedtime = data['target_bedtime']
+            if 'target_wake_time' in data: user.target_wake_time = data['target_wake_time']
+            db.session.commit()
+            
+        return jsonify({
+            'username': user.username,
+            'email': user.email,
+            'target_bedtime': user.target_bedtime,
+            'target_wake_time': user.target_wake_time
+        }), 200
+    except Exception as e:
+        print(f"[BACKEND ERROR] user_settings failed: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @main.route('/api/v1/telemetry', methods=['POST'])
 @jwt_required()
@@ -218,35 +224,41 @@ def morning_report():
 @main.route('/api/v1/dashboard', methods=['GET'])
 @jwt_required()
 def dashboard_data():
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    # Stricter query: get latest by date AND then by ID
-    logs = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc(), DailyLog.id.desc()).limit(7).all()
-    
-    # DEBUG TRACE: show all log dates in server terminal
-    print(f"[DASHBOARD DEBUG] user_id={user_id}, UTC now={datetime.utcnow()}, logs found={len(logs)}")
-    for l in logs:
-        print(f"  -> Log id={l.id} date={l.date} app_usage_json_len={len(l.app_usage_json or '')}")
-    
-    stability_index = RiskEngine.calculate_stability_index(logs)
-    latest = logs[0] if logs else None
-    
-    state, label, bedtime = get_current_dashboard_state(user)
-    
-    return jsonify({
-        'username': user.username,
-        'dashboard_state': state,
-        'cycle_label': label,
-        'stability_index': stability_index,
-        'needs_morning_checkin': state == 'pending',
-        'latest_risk_score': round(latest.risk_score, 2) if latest and latest.risk_score else 0,
-        'latest_risk_level': latest.risk_level if latest else 'Unknown',
-        'apps_usage': json.loads(latest.app_usage_json) if latest and latest.app_usage_json else [],
-        'audio_prescription': InsightEngine.get_audio_prescription(latest) if latest else "Silence",
-        'next_bedtime': bedrock_to_iso(bedtime)
-    }), 200
+    import traceback
+    try:
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        # Stricter query: get latest by date AND then by ID
+        logs = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc(), DailyLog.id.desc()).limit(7).all()
+        
+        # DEBUG TRACE: show all log dates in server terminal
+        print(f"[DASHBOARD DEBUG] user_id={user_id}, UTC now={datetime.utcnow()}, logs found={len(logs)}")
+        for l in logs:
+            print(f"  -> Log id={l.id} date={l.date} app_usage_json_len={len(l.app_usage_json or '')}")
+        
+        stability_index = RiskEngine.calculate_stability_index(logs)
+        latest = logs[0] if logs else None
+        
+        state, label, bedtime = get_current_dashboard_state(user)
+        
+        return jsonify({
+            'username': user.username,
+            'dashboard_state': state,
+            'cycle_label': label,
+            'stability_index': stability_index,
+            'needs_morning_checkin': state == 'pending',
+            'latest_risk_score': round(latest.risk_score, 2) if latest and latest.risk_score else 0,
+            'latest_risk_level': latest.risk_level if latest else 'Unknown',
+            'apps_usage': json.loads(latest.app_usage_json) if latest and latest.app_usage_json else [],
+            'audio_prescription': InsightEngine.get_audio_prescription(latest) if latest else "Silence",
+            'next_bedtime': bedrock_to_iso(bedtime)
+        }), 200
+    except Exception as e:
+        print(f"[BACKEND ERROR] dashboard_data failed: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 def bedrock_to_iso(time_str):
     now = datetime.utcnow()
