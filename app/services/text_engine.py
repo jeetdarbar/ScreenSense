@@ -117,10 +117,27 @@ class TextEngine:
         weighted_sum = 0
         total_clock_minutes = 0
         for app in apps:
+            pkg = app.get('package', '').lower()
+            name = app.get('name', '').lower()
+            
+            # ANTI-GHOSTING: Ignore the app itself
+            if "screensense" in pkg or "screensense" in name:
+                continue
+
             mins = app.get('minutes', 0)
             weight = weights.get(app.get('category', 'Other'), 0.5)
             weighted_sum += (mins * weight)
             total_clock_minutes += mins
+
+        # 3. CLOCK CAP: Ensure total minutes doesn't exceed time since midnight
+        from datetime import datetime
+        now = datetime.utcnow()
+        minutes_since_midnight = now.hour * 60 + now.minute
+        if total_clock_minutes > minutes_since_midnight:
+            # Scale down proportionally if we have overlapping ghost usage
+            reduction_factor = minutes_since_midnight / total_clock_minutes
+            total_clock_minutes = minutes_since_midnight
+            weighted_sum *= reduction_factor
 
         highest_app = max(apps, key=lambda a: a.get('minutes', 0))
         driver = highest_app.get('name', 'your phone')
