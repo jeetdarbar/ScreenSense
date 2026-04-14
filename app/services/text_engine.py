@@ -129,27 +129,17 @@ class TextEngine:
             weighted_sum += (mins * weight)
             total_clock_minutes += mins
 
-        # 3. CLOCK CAP: Ensure total minutes doesn't exceed time since midnight
-        from datetime import datetime
-        now = datetime.utcnow()
-        minutes_since_midnight = now.hour * 60 + now.minute
-        if total_clock_minutes > minutes_since_midnight:
-            # Scale down proportionally if we have overlapping ghost usage
-            reduction_factor = minutes_since_midnight / total_clock_minutes
-            total_clock_minutes = minutes_since_midnight
-            weighted_sum *= reduction_factor
-
         highest_app = max(apps, key=lambda a: a.get('minutes', 0))
         driver = highest_app.get('name', 'your phone')
         max_val = highest_app.get('minutes', 0)
         intensity = int(weighted_sum)
         
-        # 3. Multi-Factor "Overload" Detection
-        if intensity > 180:
+        # 3. Multi-Factor "Overload" Detection (CALIBRATED)
+        if intensity > 120:
             return (f"⚠️ DOPAMINE BURNOUT: You had a 'Cerebral Load' of {intensity} units across {total_clock_minutes}m of usage. "
-                    f"This creates a massive 'Stimulation Debt' for your brain. "
-                    f"While {total_clock_minutes}m was your clock time, the high intensity of apps like {driver} "
-                    f"kept your mind chemically too active to enter deep sleep naturally.")
+                    f"This creates a significant 'Stimulation Debt' for your brain. "
+                    f"While {total_clock_minutes}m was your clock time, the intensity of apps like {driver} "
+                    f"kept your mind chemically too active to enter deep sleep loops naturally.")
 
         # Phase 4: 3. Sleep Inertia (Grogginess) Correlation Check
         if grogginess_score >= 7 and max_val > 60 and minutes_to_sleep < 30:
