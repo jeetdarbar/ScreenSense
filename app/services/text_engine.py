@@ -107,18 +107,32 @@ class TextEngine:
         if not apps:
             return "No massive screen usage detected! Your circadian sync is perfect."
             
+        # 1. Define Stimulation Weights (Dopaminergic Velocity Heuristics)
+        weights = {
+            "Social": 1.0, "Games": 1.0, "Video": 0.6,
+            "Audio": 0.4, "Productivity": 0.3, "Utility": 0.1, "Other": 0.5
+        }
+
+        # 2. Calculate Weighted Stimulation (Cerebral Load)
+        weighted_sum = 0
+        total_clock_minutes = 0
+        for app in apps:
+            mins = app.get('minutes', 0)
+            weight = weights.get(app.get('category', 'Other'), 0.5)
+            weighted_sum += (mins * weight)
+            total_clock_minutes += mins
+
         highest_app = max(apps, key=lambda a: a.get('minutes', 0))
         driver = highest_app.get('name', 'your phone')
-        category = highest_app.get('category', 'Other')
         max_val = highest_app.get('minutes', 0)
-        total_usage = sum(app.get('minutes', 0) for app in apps)
+        intensity = int(weighted_sum)
         
-        # 2. Multi-Factor "Overload" Detection
-        if total_usage > 180:
-            return (f"⚠️ DOPAMINE BURNOUT: You spent a total of {total_usage} minutes on screens. "
-                    f"This creates a huge 'Stimulation Debt' for your brain. "
-                    f"Even if you felt physically tired, your mind was chemically too loud and active to sleep peacefully. "
-                    f"It's like trying to park a car that's moving at 100 miles per hour.")
+        # 3. Multi-Factor "Overload" Detection
+        if intensity > 180:
+            return (f"⚠️ DOPAMINE BURNOUT: You had a 'Cerebral Load' of {intensity} units across {total_clock_minutes}m of usage. "
+                    f"This creates a massive 'Stimulation Debt' for your brain. "
+                    f"While {total_clock_minutes}m was your clock time, the high intensity of apps like {driver} "
+                    f"kept your mind chemically too active to enter deep sleep naturally.")
 
         # Phase 4: 3. Sleep Inertia (Grogginess) Correlation Check
         if grogginess_score >= 7 and max_val > 60 and minutes_to_sleep < 30:
