@@ -227,7 +227,17 @@ def morning_report():
         latest_log = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc(), DailyLog.id.desc()).first()
         
         if not latest_log:
-            return jsonify({'error': 'No telemetry data'}), 404
+            user = User.query.get(user_id)
+            latest_log = DailyLog(
+                user_id=user_id,
+                date=datetime.utcnow().date(),
+                target_bedtime=user.target_bedtime if user else "23:00",
+                target_wake_time=user.target_wake_time if user else "07:00",
+                pickups_after_bedtime=0
+            )
+            db.session.add(latest_log)
+            db.session.commit()
+            print(f"[BACKEND] Created skeleton log for user {user_id}")
             
         time_to_asleep = int(data.get('time_to_fall_asleep_mins', 0))
         groggy_score = int(data.get('morning_grogginess_score', 1))
