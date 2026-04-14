@@ -259,7 +259,7 @@ def morning_report():
         
         # 1. Fetch apps for engine
         import json
-        apps = json.loads(latest_log.apps_usage_json) if latest_log.apps_usage_json else []
+        apps = json.loads(latest_log.app_usage_json) if latest_log.app_usage_json else []
         
         # 2. Generate Insight from TextEngine
         analysis = InsightEngine.generate_root_cause_analysis(
