@@ -103,16 +103,10 @@ class InsightEngine:
         """
         from app.services.text_engine import TextEngine
 
-        # Phase 4 Updates: Grab caffeine data from the log
-        caffeine_mg = getattr(daily_log, 'active_caffeine_mg', 0.0)
-        caffeine_modifiers = getattr(daily_log, 'caffeine_modifiers', False)
-        
         # We also need to extract specifically which app was the problem, TextEngine handles this.
         return TextEngine.generate_morning_analysis(
             daily_log.get_usage_list(),
             time_to_sleep_mins,
-            caffeine_mg,
-            caffeine_modifiers,
             grogginess_score
         )
 

@@ -50,12 +50,6 @@ class DailyLog(db.Model):
     risk_score = db.Column(db.Float, nullable=True) # 0-100
     risk_level = db.Column(db.String(20), nullable=True) # Safe, Moderate, High
     
-    # Phase 4: Caffeine Engine
-    caffeine_type = db.Column(db.String(50), nullable=True, default="None")
-    caffeine_modifiers = db.Column(db.Boolean, nullable=True, default=False)
-    caffeine_time = db.Column(db.String(10), nullable=True) # HH:MM format
-    active_caffeine_mg = db.Column(db.Float, nullable=True, default=0.0)
-    
     # Store the Gemini Generated Analysis for high-speed historical browsing
     report_json = db.Column(db.Text, nullable=True) # JSON: {"reinforcement": "...", "analysis": "...", "action_plan": "..."}
     

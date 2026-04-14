@@ -9,47 +9,6 @@ class AnalyticsEngine:
     """
 
     @staticmethod
-    def calculate_active_caffeine(caffeine_type, consumption_time, target_bedtime):
-        """
-        Calculates remaining active caffeine mg at bedtime using exponential decay.
-        Formula: N(t) = N0 * (0.5) ^ (t / 5.5)
-        """
-        base_mg = {
-            "Coffee": 95,
-            "Tea": 47,
-            "Energy Drink": 150,
-            "Dark Chocolate": 12,
-            "None": 0
-        }
-        
-        n0 = base_mg.get(caffeine_type, 0)
-        if n0 == 0 or not consumption_time or not target_bedtime:
-            return 0.0
-            
-        try:
-            from datetime import datetime
-            time_format = "%H:%M"
-            
-            t_consume = datetime.strptime(consumption_time, time_format)
-            t_bed = datetime.strptime(target_bedtime, time_format)
-            
-            # Handle cross-midnight logic if necessary (simplified for now)
-            delta = t_bed - t_consume
-            hours_elapsed = delta.total_seconds() / 3600.0
-            
-            # If they had coffee after bedtime, assume 0 decay for simplicity, or handle it properly 
-            if hours_elapsed < 0:
-                hours_elapsed += 24.0 # It was consumed the previous day...
-                
-            # N(t) = N0 * (0.5) ^ (t/5.5)
-            active_mg = n0 * (0.5 ** (hours_elapsed / 5.5))
-            return round(active_mg, 2)
-            
-        except Exception as e:
-            print(f"Error calculating caffeine decay: {e}")
-            return 0.0
-
-    @staticmethod
     def calculate_behavioral_correlations(user_id, limit=10):
         """
         Fetches last `limit` entries (default 10), calculates Pearson correlation,

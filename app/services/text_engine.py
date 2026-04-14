@@ -100,7 +100,7 @@ class TextEngine:
         return f"Digital consumption via {driver_name} detected. Monitor your screen time to protect sleep quality."
 
     @staticmethod
-    def generate_morning_analysis(apps, minutes_to_sleep, active_caffeine_mg=0, caffeine_modifiers=False, grogginess_score=1):
+    def generate_morning_analysis(apps, minutes_to_sleep, grogginess_score=1):
         """
         Generates a detailed, non-repetitive Root Cause Analysis in simple English.
         """
@@ -113,16 +113,6 @@ class TextEngine:
         max_val = highest_app.get('minutes', 0)
         total_usage = sum(app.get('minutes', 0) for app in apps)
         
-        # Phase 4: 1. Caffeine Load Check (Highest Priority Override)
-        if active_caffeine_mg > 25:
-            base_msg = (f"☕ STIMULANT OVERLOAD: You still had ~{int(active_caffeine_mg)}mg of active caffeine binding to your "
-                        f"adenosine receptors at bedtime. This acts as a chemical blockade against sleep.")
-            
-            if caffeine_modifiers:
-                base_msg += " Furthermore, the added sugar/milk caused a late-night glycemic spike followed by a crash, destabilizing your deep REM cycles."
-                
-            return base_msg
-
         # 2. Multi-Factor "Overload" Detection
         if total_usage > 180:
             return (f"⚠️ DOPAMINE BURNOUT: You spent a total of {total_usage} minutes on screens. "

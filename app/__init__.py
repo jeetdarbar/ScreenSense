@@ -61,6 +61,19 @@ def create_app():
         except Exception:
             db.session.rollback()
 
+        # 3. DailyLog Table (MANDATORY for Morning Report)
+        cols_log = [
+            ("target_bedtime", "VARCHAR(10) DEFAULT '23:00'"),
+            ("target_wake_time", "VARCHAR(10) DEFAULT '07:00'")
+        ]
+        for col, definition in cols_log:
+            try:
+                db.session.execute(text(f"ALTER TABLE daily_log ADD COLUMN {col} {definition}"))
+                db.session.commit()
+                print(f"[BOOT] Added missing column {col} to DailyLog table.")
+            except Exception:
+                db.session.rollback()
+
         # Seed fundamental App Categories if missing
         seed_data = [
             {"package": "com.instagram.android", "category": "Social Media", "name": "Instagram"},
