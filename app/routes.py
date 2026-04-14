@@ -4,10 +4,39 @@ from . import db
 from .models import User, DailyLog, InterventionFeedback, AppCategoryMap
 from .services.risk_engine import RiskEngine
 from .services.insight_engine import InsightEngine
-from datetime import datetime
+from .services.analytics import AnalyticsEngine
+from datetime import datetime, timedelta
 import json
 
 main = Blueprint('main', __name__)
+
+def get_current_dashboard_state(user):
+    now = datetime.utcnow() + timedelta(hours=5, minutes=30) #IST
+    current_time_str = now.strftime('%H:%M')
+    
+    log = DailyLog.query.filter_by(user_id=user.id).order_by(DailyLog.date.desc()).first()
+    
+    # State A: Live (Danger Zone)
+    is_after_bedtime = current_time_str >= user.target_bedtime
+    is_before_wake = current_time_str < user.target_wake_time
+    
+    feedback = None
+    if log:
+        feedback = InterventionFeedback.query.filter_by(daily_log_id=log.id).first()
+    
+    if (is_after_bedtime or is_before_wake) and not feedback:
+        return "live", "Tonight's Live Risk", user.target_bedtime
+        
+    if not log:
+        # For brand new users during the day, show reflection with baseline
+        return "reflection", "Getting Started", user.target_bedtime
+
+    # State B: Pending (Waiting for Morning Report)
+    if not feedback and current_time_str >= user.target_wake_time:
+        return "pending", "Waiting for Perspective", user.target_bedtime
+        
+    # State C: Reflection (Locked Dashboard)
+    return "reflection", "Last Night's Impact", user.target_bedtime
 
 @main.route('/api/v1/auth/register', methods=['POST'])
 def register():
@@ -40,150 +69,245 @@ def login():
         
     return jsonify({'error': 'Invalid email or password'}), 401
 
+@main.route('/api/v1/user/settings', methods=['GET', 'PUT'])
+@jwt_required()
+def user_settings():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    if request.method == 'PUT':
+        data = request.json
+        if 'username' in data: user.username = data['username']
+        if 'password' in data: user.set_password(data['password'])
+        if 'target_bedtime' in data: user.target_bedtime = data['target_bedtime']
+        if 'target_wake_time' in data: user.target_wake_time = data['target_wake_time']
+        db.session.commit()
+        
+    return jsonify({
+        'username': user.username,
+        'email': user.email,
+        'target_bedtime': user.target_bedtime,
+        'target_wake_time': user.target_wake_time
+    }), 200
+
 @main.route('/api/v1/telemetry', methods=['POST'])
 @jwt_required()
 def sync_telemetry():
-    """Receives raw Android Package Usage Data and dynamically categorizes it"""
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-    raw_data = request.json # Expecting [{"package": "com.instagram.android", "minutes": 81}, ...]
-    
-    if raw_data is None or not isinstance(raw_data, list):
-        # We can accept an empty list if there's no screen time, but it must be a list
-        return jsonify({'error': 'Invalid payload map, expected list of objects'}), 400
-
-    today = datetime.utcnow().date()
-    log = DailyLog.query.filter_by(user_id=user.id, date=today).first()
-    
-    formatted_apps = []
-    
-    for item in raw_data:
-        pkg_name = item.get('package', '')
-        mins = item.get('minutes', 0)
+    import traceback
+    try:
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        if not user:
+            print(f"[BACKEND ERROR] User not found for id={user_id}")
+            return jsonify({'error': 'User not found'}), 404
+        payload = request.json
         
-        # We skip apps that have 0 usage minutes natively
-        if mins <= 0 or not pkg_name: 
-            continue
-            
-        # Dynamic Lookup in our new Backend Logic
-        category_map = AppCategoryMap.query.filter_by(package_name=pkg_name).first()
-        if category_map:
-            category = category_map.category
-            readable = category_map.readable_name
+        def format_usage(raw_list):
+            formatted = []
+            for item in raw_list:
+                pkg_name = item.get('package', '')
+                mins = item.get('minutes', 0)
+                if mins <= 0 or not pkg_name: continue
+                formatted.append({
+                    "name": item.get('name', pkg_name.split('.')[-1].capitalize()),
+                    "category": item.get('category', 'Utility'),
+                    "minutes": mins
+                })
+            return formatted
+
+        formatted_full = format_usage(payload.get('full_usage', []))
+        formatted_risk = format_usage(payload.get('risk_usage', []))
+        
+        print(f"[BACKEND] Sync for user {user.id}. Apps received: {len(formatted_full)}")
+
+        today = datetime.utcnow().date()
+        print(f"[BACKEND] Querying for date={today}")
+        log = DailyLog.query.filter_by(user_id=user.id, date=today).first()
+        
+        if not log:
+            print("[BACKEND] No log found. Creating new one.")
+            log = DailyLog(
+                user_id=user.id, 
+                date=today, 
+                target_bedtime=user.target_bedtime,
+                target_wake_time=user.target_wake_time,
+                app_usage_json=json.dumps(formatted_full),
+                risk_usage_json=json.dumps(formatted_risk),
+                pickups_after_bedtime=0
+            )
+            db.session.add(log)
         else:
-            # Fallback for apps not explicitly in the AppCategoryMap (e.g. system apps, unknown apps)
-            category = "Game" if "game" in pkg_name.lower() else "Other"
-            readable = pkg_name.split('.')[-1].capitalize() # Quick humanizing heuristic
-
-        # For analysis, we send only Social Media and Game to the UI, 
-        # but realistically we can append them all.
-        if category in ["Social Media", "Game"]:
-            formatted_apps.append({
-                "name": readable,
-                "category": category,
-                "minutes": mins
-            })
-
-    if not log:
-        # Create fresh log with 23:00 default bedtime if missing
-        last_log = DailyLog.query.filter_by(user_id=user.id).order_by(DailyLog.id.desc()).first()
-        tb = getattr(last_log, 'target_bedtime', '23:00') if last_log else '23:00'
+            print(f"[BACKEND] Existing log found (id={log.id}). Updating.")
+            log.app_usage_json = json.dumps(formatted_full)
+            log.risk_usage_json = json.dumps(formatted_risk)
+            
+        db.session.commit()
+        print(f"[BACKEND] DB commit successful. log.id={log.id}")
         
-        log = DailyLog(
-            user_id=user.id,
-            date=today,
-            target_bedtime=tb,
-            app_usage_json=json.dumps(formatted_apps),
-            academic_minutes_after_bedtime=0,
-            pickups_after_bedtime=0
-        )
-        db.session.add(log)
-    else:
-        log.app_usage_json = json.dumps(formatted_apps)
+        try:
+            previous_logs = DailyLog.query.filter_by(user_id=user.id).order_by(DailyLog.date.desc()).limit(14).all()
+            risk_score = RiskEngine.calculate_risk_score(log, previous_logs)
+            log.risk_score = risk_score
+            log.risk_level = RiskEngine.get_risk_level(risk_score)
+            db.session.commit()
+            print(f"[BACKEND] Risk score calculated: {risk_score}")
+        except Exception as risk_err:
+            print(f"[BACKEND WARNING] Risk engine failed (non-fatal): {risk_err}")
+            risk_score = 0
         
-    db.session.commit() # Flush so risk engine has updated variables
-    
-    # Recalculate AI Risk
-    previous_logs = DailyLog.query.filter_by(user_id=user.id).order_by(DailyLog.date.desc()).limit(14).all()
-    risk_score = RiskEngine.calculate_risk_score(log, previous_logs)
-    log.risk_score = risk_score
-    log.risk_level = RiskEngine.get_risk_level(risk_score)
-    db.session.commit()
-    
-    return jsonify({
-        'status': 'success',
-        'tracked_apps_count': len(formatted_apps),
-        'risk_score': risk_score,
-        'risk_level': log.risk_level
-    }), 200
+        saved_count = len(formatted_full)
+        print(f"[BACKEND] SUCCESS. Returning saved_count={saved_count}")
+        
+        return jsonify({
+            'status': 'success', 
+            'risk_score': risk_score,
+            'saved_count': saved_count
+        }), 200
+
+    except Exception as e:
+        print(f"[BACKEND CRITICAL] sync_telemetry crashed: {e}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e), 'saved_count': -1}), 500
 
 @main.route('/api/v1/morning_report', methods=['POST'])
 @jwt_required()
 def morning_report():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     data = request.json
+    latest_log = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc(), DailyLog.id.desc()).first()
     
-    latest_log = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.id.desc()).first()
     if not latest_log:
-        return jsonify({'error': 'No telemetry data to attach to'}), 404
+        return jsonify({'error': 'No telemetry data'}), 404
         
-    # User Inputs from Flutter
     time_to_asleep = int(data.get('time_to_fall_asleep_mins', 0))
     groggy_score = int(data.get('morning_grogginess_score', 1))
     
     feedback = InterventionFeedback.query.filter_by(daily_log_id=latest_log.id).first()
     if not feedback:
-        feedback = InterventionFeedback(
-            daily_log_id=latest_log.id,
-            time_to_fall_asleep_mins=time_to_asleep,
-            morning_grogginess_score=groggy_score,
-            intervention_type='standard'
-        )
+        feedback = InterventionFeedback(daily_log_id=latest_log.id, time_to_fall_asleep_mins=time_to_asleep, morning_grogginess_score=groggy_score)
         db.session.add(feedback)
     else:
         feedback.time_to_fall_asleep_mins = time_to_asleep
         feedback.morning_grogginess_score = groggy_score
-        
-    db.session.commit()
     
-    # Generate Insight from Google Gemini Engine
+    # Generate Insight from Gemini
     morning_summary = InsightEngine.generate_morning_report(latest_log, time_to_asleep)
     root_cause = InsightEngine.generate_root_cause_analysis(latest_log, time_to_asleep)
     
-    return jsonify({
-        "status": "success",
+    report_data = {
         "reinforcement": morning_summary['reinforcement'],
         "analysis": root_cause,
         "action_plan": morning_summary['action_plan']
+    }
+    
+    # PERSISTENCE: Save the report to the database for historical browsing
+    latest_log.report_json = json.dumps(report_data)
+    db.session.commit()
+    
+    # Dynamic Analytical Transition Message
+    transition = "Optimal Cycle Achieved." if latest_log.risk_score < 30 else "Impact Calculated."
+    
+    return jsonify({
+        "status": "success", 
+        "transition_message": transition,
+        **report_data
     }), 200
 
 @main.route('/api/v1/dashboard', methods=['GET'])
 @jwt_required()
 def dashboard_data():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    # Stricter query: get latest by date AND then by ID
+    logs = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc(), DailyLog.id.desc()).limit(7).all()
     
-    logs = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.id.desc()).limit(7).all()
+    # DEBUG TRACE: show all log dates in server terminal
+    print(f"[DASHBOARD DEBUG] user_id={user_id}, UTC now={datetime.utcnow()}, logs found={len(logs)}")
+    for l in logs:
+        print(f"  -> Log id={l.id} date={l.date} app_usage_json_len={len(l.app_usage_json or '')}")
+    
     stability_index = RiskEngine.calculate_stability_index(logs)
-    
     latest = logs[0] if logs else None
-    needs_checkin = False
     
-    if latest:
-        feedback = InterventionFeedback.query.filter_by(daily_log_id=latest.id).first()
-        if not feedback:
-            needs_checkin = True
-            
-    # Chart Data (reverse so oldest point is on the left)
-    logs_for_chart = list(reversed(logs))
+    state, label, bedtime = get_current_dashboard_state(user)
     
     return jsonify({
         'username': user.username,
+        'dashboard_state': state,
+        'cycle_label': label,
         'stability_index': stability_index,
-        'needs_morning_checkin': needs_checkin,
+        'needs_morning_checkin': state == 'pending',
         'latest_risk_score': round(latest.risk_score, 2) if latest and latest.risk_score else 0,
         'latest_risk_level': latest.risk_level if latest else 'Unknown',
-        'chart_labels': [log.date.strftime('%Y-%m-%d') for log in logs_for_chart],
-        'chart_risk_data': [log.risk_score or 0 for log in logs_for_chart],
         'apps_usage': json.loads(latest.app_usage_json) if latest and latest.app_usage_json else [],
+        'audio_prescription': InsightEngine.get_audio_prescription(latest) if latest else "Silence",
+        'next_bedtime': bedrock_to_iso(bedtime)
+    }), 200
+
+def bedrock_to_iso(time_str):
+    now = datetime.utcnow()
+    return f"{now.date().isoformat()}T{time_str}:00Z"
+
+@main.route('/api/v1/history/calendar', methods=['GET'])
+@jwt_required()
+def history_calendar():
+    user_id = int(get_jwt_identity())
+    logs = DailyLog.query.filter_by(user_id=user_id).all()
+    # Return a list of ISO dates that have entries
+    return jsonify([log.date.isoformat() for log in logs]), 200
+
+@main.route('/api/v1/history/day/<date_str>', methods=['GET'])
+@jwt_required()
+def history_day(date_str):
+    user_id = int(get_jwt_identity())
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    log = DailyLog.query.filter_by(user_id=user_id, date=date_obj).first()
+    
+    if not log:
+        return jsonify({'error': 'No data for this date'}), 404
+        
+    apps = json.loads(log.app_usage_json) if log.app_usage_json else []
+    total_mins = sum([a['minutes'] for a in apps])
+    most_used = max(apps, key=lambda x: x['minutes'])['name'] if apps else "None"
+    
+    return jsonify({
+        'date': date_str,
+        'total_minutes': total_mins,
+        'most_used_app': most_used,
+        'report': json.loads(log.report_json) if log.report_json else None,
+        'risk_score': log.risk_score,
+        'risk_level': log.risk_level
+    }), 200
+
+@main.route('/api/v1/history/weekly_summary', methods=['GET'])
+@jwt_required()
+def weekly_summary():
+    user_id = int(get_jwt_identity())
+    logs = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc()).limit(7).all()
+    if not logs:
+        return jsonify({'error': 'Insufficient data'}), 400
+        
+    avg_risk = sum([log.risk_score or 0 for log in logs]) / len(logs)
+    
+    # Aggregate app usage across the week
+    all_apps = {}
+    for log in logs:
+        apps = json.loads(log.app_usage_json) if log.app_usage_json else []
+        for a in apps:
+            all_apps[a['name']] = all_apps.get(a['name'], 0) + a['minutes']
+            
+    top_disruptors = sorted(all_apps.items(), key=lambda x: x[1], reverse=True)[:3]
+    
+    # Generate a Weekly Insight from Gemini
+    # For now, we reuse the InsightEngine or create a simplified summary
+    summary_text = f"Over the past 7 days, your average risk was {round(avg_risk, 1)}%. Your biggest disruptors are {', '.join([d[0] for d in top_disruptors])}."
+    
+    return jsonify({
+        'average_risk': round(avg_risk, 2),
+        'top_disruptors': top_disruptors,
+        'weekly_insight': summary_text
     }), 200
