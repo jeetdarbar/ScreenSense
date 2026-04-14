@@ -207,53 +207,63 @@ def sync_telemetry():
 @main.route('/api/v1/morning_report', methods=['POST'])
 @jwt_required()
 def morning_report():
-    user_id = int(get_jwt_identity())
-    data = request.json
-    latest_log = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc(), DailyLog.id.desc()).first()
-    
-    if not latest_log:
-        return jsonify({'error': 'No telemetry data'}), 404
+    try:
+        user_id = int(get_jwt_identity())
+        data = request.json
+        latest_log = DailyLog.query.filter_by(user_id=user_id).order_by(DailyLog.date.desc(), DailyLog.id.desc()).first()
         
-    time_to_asleep = int(data.get('time_to_fall_asleep_mins', 0))
-    groggy_score = int(data.get('morning_grogginess_score', 1))
-    wake_time = data.get('actual_wake_time', '07:00')
-    
-    feedback = InterventionFeedback.query.filter_by(daily_log_id=latest_log.id).first()
-    if not feedback:
-        feedback = InterventionFeedback(
-            daily_log_id=latest_log.id, 
-            time_to_fall_asleep_mins=time_to_asleep, 
-            morning_grogginess_score=groggy_score,
-            actual_wake_time=wake_time
+        if not latest_log:
+            return jsonify({'error': 'No telemetry data'}), 404
+            
+        time_to_asleep = int(data.get('time_to_fall_asleep_mins', 0))
+        groggy_score = int(data.get('morning_grogginess_score', 1))
+        wake_time = data.get('actual_wake_time', '07:00')
+        
+        feedback = InterventionFeedback.query.filter_by(daily_log_id=latest_log.id).first()
+        if not feedback:
+            feedback = InterventionFeedback(
+                daily_log_id=latest_log.id, 
+                time_to_fall_asleep_mins=time_to_asleep, 
+                morning_grogginess_score=groggy_score,
+                actual_wake_time=wake_time
+            )
+            db.session.add(feedback)
+        else:
+            feedback.time_to_fall_asleep_mins = time_to_asleep
+            feedback.morning_grogginess_score = groggy_score
+            feedback.actual_wake_time = wake_time
+        
+        # 1. Fetch apps for engine
+        import json
+        apps = json.loads(latest_log.apps_usage_json) if latest_log.apps_usage_json else []
+        
+        # 2. Generate Insight from TextEngine
+        analysis = InsightEngine.generate_morning_analysis(
+            apps=apps,
+            minutes_to_sleep=time_to_asleep,
+            grogginess_score=groggy_score
         )
-        db.session.add(feedback)
-    else:
-        feedback.time_to_fall_asleep_mins = time_to_asleep
-        feedback.morning_grogginess_score = groggy_score
-        feedback.actual_wake_time = wake_time
-    
-    # Generate Insight from Gemini
-    morning_summary = InsightEngine.generate_morning_report(latest_log, time_to_asleep)
-    root_cause = InsightEngine.generate_root_cause_analysis(latest_log, time_to_asleep)
-    
-    report_data = {
-        "reinforcement": morning_summary['reinforcement'],
-        "analysis": root_cause,
-        "action_plan": morning_summary['action_plan']
-    }
-    
-    # PERSISTENCE: Save the report to the database for historical browsing
-    latest_log.report_json = json.dumps(report_data)
-    db.session.commit()
-    
-    # Dynamic Analytical Transition Message
-    transition = "Optimal Cycle Achieved." if latest_log.risk_score < 30 else "Impact Calculated."
-    
-    return jsonify({
-        "status": "success", 
-        "transition_message": transition,
-        **report_data
-    }), 200
+        
+        report_data = {
+            "reinforcement": analysis,
+            "analysis": "Morning Circadian Assessment Complete.",
+            "action_plan": "Keep consistent with your wake-up time."
+        }
+        
+        # PERSISTENCE: Save to DB
+        latest_log.report_json = json.dumps(report_data)
+        db.session.commit()
+        
+        return jsonify({
+            "status": "success", 
+            "transition_message": "Impact Calculated.",
+            "reinforcement": analysis
+        }), 200
+
+    except Exception as e:
+        print(f"[BACKEND CRITICAL] morning_report crashed: {e}")
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @main.route('/api/v1/dashboard', methods=['GET'])
 @jwt_required()
